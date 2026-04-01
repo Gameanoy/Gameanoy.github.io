@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEON MERGE | SMONA ASMR</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Kanit:wght@300&display=swap" rel="stylesheet">
+    <style>
+        /* ... (CSS เดิมทั้งหมดจากโค้ดก่อนหน้า) ... */
+        :root { --neon: #00f2ff; --bg: #050508; --cell-bg: rgba(255, 255, 255, 0.03); }
+        * { box-sizing: border-box; touch-action: none; user-select: none; }
+        body { background: var(--bg); color: white; font-family: 'Orbitron', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        .score-container { font-size: 28px; color: var(--neon); text-shadow: 0 0 15px var(--neon); }
+        .grid { display: grid; grid-template-columns: repeat(4, 75px); grid-template-rows: repeat(4, 75px); gap: 12px; background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 15px; border: 1px solid rgba(0, 242, 255, 0.1); position: relative; }
+        .cell { width: 75px; height: 75px; background: var(--cell-bg); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; transition: transform 0.1s ease, background 0.2s ease; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .tile-new { animation: popIn 0.2s ease-out; }
+        @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+        .tile-2 { color: #eee; background: rgba(255,255,255,0.08); }
+        .tile-4 { color: var(--neon); text-shadow: 0 0 10px var(--neon); background: rgba(0,242,255,0.1); }
+        .tile-8 { color: #ff0055; text-shadow: 0 0 10px #ff0055; background: rgba(255,0,85,0.1); }
+        .tile-16 { color: #ffcc00; text-shadow: 0 0 10px #ffcc00; background: rgba(255,204,0,0.1); }
+        #game-over { position: absolute; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: none; flex-direction: column; align-items: center; justify-content: center; border-radius: 15px; z-index: 10; animation: fadeIn 0.5s ease; }
+        .btn-restart { margin-top: 20px; padding: 10px 25px; background: var(--neon); border: none; border-radius: 50px; font-family: 'Orbitron'; cursor: pointer; box-shadow: 0 0 15px var(--neon); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="score-container">SCORE: <span id="score">0</span></div>
+    </div>
+
+    <div class="grid" id="grid">
+        <div id="game-over">
+            <h2 style="color: #ff0055; text-shadow: 0 0 10px #ff0055;">SYSTEM DOWN</h2>
+            <p style="font-size: 14px;">GAME OVER</p>
+            <button class="btn-restart" onclick="restartGame()">REBOOT</button>
+        </div>
+    </div>
+
+    <script>
+        const gridSize = 4;
+        let board = Array(gridSize * gridSize).fill(0);
+        let score = 0;
+        let audioInited = false;
+
+        // --- ระบบเสียงขั้นสูง (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function createSound(freq, type, duration, vol, ramp = true) {
+            if(!audioInited) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            if(ramp) osc.frequency.exponentialRampToValueAtTime(freq * 2, audioCtx.currentTime + duration);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        // 1. เสียงเลื่อน (Slide) - เสียงลมเบาๆ
+        function playSlideSound() { createSound(200, 'triangle', 0.1, 0.02, false); }
+
+        // 2. เสียงรวมร่าง (Merge) - ยิ่งเลขเยอะเสียงยิ่งใส
+        function playMergeSound(value) {
+            const pitch = 400 + (Math.log2(value) * 100);
+            createSound(pitch, 'sine', 0.2, 0.05);
+        }
+
+        // 3. เสียง Game Over - เสียงดิ่งลง
+        function playGameOverSound() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 1);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 1);
+        }
+
+        // 4. เสียงเพลงคลอ (BGM)
+        function playBGM() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(110, audioCtx.currentTime); // โน้ต A2 นุ่มๆ
+            gain.gain.setValueAtTime(0.01, audioCtx.currentTime);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start();
+        }
+
+        function initAudio() {
+            if(audioInited) return;
+            audioCtx.resume();
+            audioInited = true;
+            playBGM();
+        }
+
+        // --- Logic เกม (ที่มีการใส่เสียงเข้าไป) ---
+        function move(direction) {
+            initAudio();
+            let oldBoard = [...board];
+            let moved = false;
+
+            for (let i = 0; i < gridSize; i++) {
+                let row = [];
+                for (let j = 0; j < gridSize; j++) {
+                    if (direction === 'left' || direction === 'right') row.push(board[i * gridSize + j]);
+                    else row.push(board[j * gridSize + i]);
+                }
+                if (direction === 'right' || direction === 'down') row.reverse();
+                
+                // ระบบสไลด์และเช็คการ Merge
+                let filteredRow = row.filter(num => num);
+                let currentMerged = false;
+                for (let k = 0; k < filteredRow.length - 1; k++) {
+                    if (filteredRow[k] === filteredRow[k+1]) {
+                        filteredRow[k] *= 2;
+                        score += filteredRow[k];
+                        filteredRow[k+1] = 0;
+                        currentMerged = true;
+                        playMergeSound(filteredRow[k]); // เล่นเสียง Merge
+                    }
+                }
+                let newRow = filteredRow.filter(num => num);
+                while (newRow.length < gridSize) newRow.push(0);
+                
+                if (direction === 'right' || direction === 'down') newRow.reverse();
+                for (let j = 0; j < gridSize; j++) {
+                    if (direction === 'left' || direction === 'right') board[i * gridSize + j] = newRow[j];
+                    else board[j * gridSize + i] = newRow[j];
+                }
+            }
+
+            if (oldBoard.join(',') !== board.join(',')) {
+                playSlideSound(); // เล่นเสียง Slide
+                generate();
+                document.getElementById('score').innerText = score;
+            }
+        }
+
+        function checkGameOver() {
+            let empty = board.includes(0);
+            let canMerge = false;
+            for(let i=0; i<16; i++) {
+                if((i%4 < 3 && board[i] === board[i+1]) || (i < 12 && board[i] === board[i+4])) {
+                    canMerge = true; break;
+                }
+            }
+            if(!empty && !canMerge) {
+                playGameOverSound(); // เล่นเสียง Game Over
+                document.getElementById('game-over').style.display = 'flex';
+            }
+        }
+
+        function restartGame() {
+            initAudio();
+            createSound(800, 'sine', 0.1, 0.05, false); // เสียงปุ่ม Reboot
+            board = Array(gridSize * gridSize).fill(0);
+            score = 0;
+            document.getElementById('score').innerText = 0;
+            document.getElementById('game-over').style.display = 'none';
+            generate(); generate();
+        }
+
+        // ส่วนที่เหลือเหมือนเดิม...
+        function createBoard(newPos = -1) {
+            const gridDisplay = document.getElementById('grid');
+            const cells = gridDisplay.querySelectorAll('.cell');
+            cells.forEach(c => c.remove());
+            board.forEach((val, i) => {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                if (val !== 0) {
+                    cell.innerText = val;
+                    cell.classList.add(`tile-${val}`);
+                    if (i === newPos) cell.classList.add('tile-new');
+                }
+                gridDisplay.appendChild(cell);
+            });
+        }
+        function generate() {
+            let emptyTiles = board.map((val, i) => val === 0 ? i : null).filter(val => val !== null);
+            if (emptyTiles.length > 0) {
+                let randomPos = emptyTiles[Math.floor(Math.random() * emptyTiles.length)];
+                board[randomPos] = Math.random() > 0.1 ? 2 : 4;
+                createBoard(randomPos);
+                checkGameOver();
+            }
+        }
+        document.addEventListener('keyup', (e) => { if (e.key.includes('Arrow')) move(e.key.replace('Arrow', '').toLowerCase()); });
+        let touchStartX = 0, touchStartY = 0;
+        document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; });
+        document.addEventListener('touchend', e => {
+            let dx = e.changedTouches[0].clientX - touchStartX;
+            let dy = e.changedTouches[0].clientY - touchStartY;
+            if (Math.abs(dx) > Math.abs(dy)) { if(Math.abs(dx)>30) move(dx>0?'right':'left'); }
+            else { if(Math.abs(dy)>30) move(dy>0?'down':'up'); }
+        });
+        generate(); generate();
+    </script>
+</body>
+</html>

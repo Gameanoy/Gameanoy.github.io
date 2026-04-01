@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Hub - Smooth UX</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+
+    <style>
+         /* สไตล์พิเศษสำหรับเกมเด่น (Cyber Jumper) */
+.featured-game-card {
+    grid-column: 1 / -1; /* สั่งให้ขยายเต็มแถวบนสุด */
+    position: relative;
+    width: 100%;
+    height: 250px; /* ใหญ่กว่าเกมอื่น */
+    background: linear-gradient(45deg, #020205, #0044ff);
+    border: 3px solid #00f2ff;
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: 0.4s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 30px rgba(0, 242, 255, 0.4);
+    margin-bottom: 20px;
+}
+
+.featured-game-card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 50px rgba(0, 242, 255, 0.7);
+    border-color: #39ff14;
+}
+
+.featured-content {
+    text-align: center;
+    color: #fff;
+    font-family: 'Orbitron', sans-serif;
+}
+
+.featured-title {
+    font-size: 2.5rem;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 5px;
+    text-shadow: 0 0 10px #00f2ff, 0 0 20px #00f2ff;
+}
+
+.featured-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: #ff0055;
+    color: white;
+    padding: 5px 15px;
+    border-radius: 50px;
+    font-size: 12px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+        :root {
+            --primary: #f806cc;
+            --secondary: #7b2ff7;
+            --bg: #050510;
+            --glass: rgba(255, 255, 255, 0.05);
+            --diamond: #00f2ff;
+            --admin-red: #ff3333;
+            --admin-green: #00ff88;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', 'Segoe UI', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background: var(--bg);
+            background: radial-gradient(circle at top right, #1a1a3e, #050510);
+            color: white;
+            min-height: 100vh;
+            padding: 15px;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* --- Header Section --- */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 18px 22px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            transition: var(--transition);
+        }
+
+        .diamond-badge {
+            background: rgba(0, 242, 255, 0.1);
+            padding: 6px 14px;
+            border-radius: 50px;
+            border: 1px solid var(--diamond);
+            color: var(--diamond);
+            font-weight: 700;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.1);
+        }
+
+        .admin-name {
+            font-weight: 800;
+            background: linear-gradient(90deg, #ff3333, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
+        }
+
+        /* --- Floating Admin Button --- */
+        .admin-fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #ff0055, #990022);
+            border-radius: 50%;
+            display: none; 
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            box-shadow: 0 10px 25px rgba(255, 0, 85, 0.4);
+            cursor: pointer;
+            z-index: 999;
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: var(--transition);
+        }
+
+        .admin-fab:active { transform: scale(0.9) rotate(-15deg); }
+
+        /* --- Smooth Modal --- */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.active { display: flex; opacity: 1; }
+
+        .modal-content {
+            background: rgba(20, 5, 5, 0.95);
+            width: 90%;
+            max-width: 420px;
+            padding: 30px;
+            border-radius: 32px;
+            border: 1px solid rgba(255, 51, 51, 0.3);
+            transform: scale(0.85);
+            transition: var(--transition);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+        }
+
+        .modal.active .modal-content { transform: scale(1); }
+
+        .admin-card {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 18px;
+            border-radius: 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: var(--transition);
+        }
+
+        .admin-card:hover { background: rgba(255, 255, 255, 0.06); }
+
+        .btn-adm {
+            width: 100%; padding: 12px; border: none; border-radius: 14px;
+            font-weight: 700; cursor: pointer; transition: var(--transition);
+            margin-top: 10px;
+        }
+
+        .btn-adm:active { transform: scale(0.96); }
+
+        /* --- Game Grid --- */
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--glass);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 28px;
+            padding: 35px 20px;
+            text-align: center;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 20px 40px rgba(248, 6, 204, 0.2);
+        }
+
+        .icon { font-size: 3.2rem; margin-bottom: 15px; display: block; filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
+
+        .logout-btn { 
+            background: rgba(255, 75, 43, 0.15); 
+            color: #ff4b2b; border: 1px solid rgba(255, 75, 43, 0.3); 
+            padding: 10px 18px; border-radius: 16px; font-weight: 700;
+            transition: var(--transition);
+        }
+        .logout-btn:hover { background: #ff4b2b; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <span style="font-size: 0.75rem; color: #777; letter-spacing: 1px;">OPERATOR</span><br>
+            <span id="display-name" style="font-size: 1.1rem;">Loading...</span><br>
+            <div class="diamond-badge">💎 <span id="d-count">0</span></div>
+        </div>
+        <button class="logout-btn" onclick="logout()">LOGOUT</button>
+    </header>
+
+    <div id="admin-fab" class="admin-fab" onclick="toggleModal(true)">🛡️</div>
+
+    <div id="admin-modal" class="modal" onclick="if(event.target==this) toggleModal(false)">
+        <div class="modal-content">
+            <h2 style="color: var(--admin-red); text-align: center; margin-bottom: 25px; letter-spacing: 2px;">ADMIN PANEL</h2>
+
+            <div class="admin-card">
+                <p style="font-size: 0.8rem; color: #888; margin-bottom: 10px;">QUICK DIAMOND INJECT</p>
+                <input type="text" id="target-user" placeholder="Target Username" 
+                       style="width:100%; padding:12px; background:#000; border:1px solid #333; border-radius:12px; color:white; margin-bottom:12px;">
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-adm" style="background:var(--admin-green); color:#000; margin:0;" onclick="admModify(1000)">+1K</button>
+                    <button class="btn-adm" style="background:gold; color:#000; margin:0;" onclick="admModify(99999)">MAX</button>
+                </div>
+            </div>
+
+            <button class="btn-adm" style="background:#0088ff; color:#fff;" onclick="admAnnounce()">GLOBAL BROADCAST</button>
+            <button class="btn-adm" style="background:#7b2ff7; color:#fff;" onclick="admScan()">SCAN PLAYER DATA</button>
+            
+            <button class="btn-adm" style="background:rgba(255,255,255,0.05); color:#888; margin-top:20px;" onclick="toggleModal(false)">CLOSE CONSOLE</button>
+        </div>
+    </div>
+        <div class="featured-game-card" onclick="playEntranceSound()">
+    <div class="featured-badge">DEMO FRO TEST</div>
+    <div class="featured-content">
+        <h1 class="featured-title">PZL GAME🛤️</h1>
+        <p style="color: #39ff14;">THIS DEMO GAME</p>
+    </div>
+</div>
+
+    <div class="game-grid">
+        <div class="card" onclick="playGame()">
+            <span class="icon">🚀</span>
+            <p style="font-weight:700; letter-spacing:1px;">LAUNCH GAME</p>
+            <small style="color:#555;">Costs 10 💎</small>
+        </div>
+        
+        <div class="card" onclick="playMinerTycoon()">
+            <span class="icon">⚒️</span>
+            <p style="font-weight:700; letter-spacing:1px;">MINER TYCOON</p>
+            <small style="color:#555;">Costs 5 💎</small>
+        </div>
+
+        <div class="card" onclick="playRunner()">
+            <span class="icon">🏃‍♂️</span>
+            <p style="font-weight:700;">CYBER RUNNER</p>
+            <small style="color:#555;">Costs 15 💎</small>
+        </div>
+
+                <div class="card" onclick="playDefender()">
+            <span class="icon">🛡️</span>
+            <p style="font-weight:700; letter-spacing:1px;">VIRUS DEFENDER</p>
+            <small style="color:#555;">Costs 30 💎</small>
+        </div>
+        
+        <div class="card" onclick="playGalacticMiner()">
+            <span class="icon">🪐</span>
+            <p style="font-weight:700; letter-spacing:1px;">GALACTIC MINER</p>
+            <small style="color:#555;">Costs 20 💎</small>
+        </div>
+                <div class="card" onclick="playNeonSurvival()">
+            <span class="icon">👾</span>
+            <p style="font-weight:700; letter-spacing:1px; color:var(--diamond);">NEON SURVIVAL</p>
+            <small style="color:#555;">Costs 10 💎</small>
+        </div>
+         <div class="card" onclick="playSlot()">
+            <span class="icon">🎲</span>
+            <p style="font-weight:700; letter-spacing:1px; color:var(--diamond);">Slot</p>
+            <small style="color:#555;">Costs 10 💎</small>
+        </div>
+        <div class="card" onclick="playHacker()">
+            <span class="icon">👁️‍🗨️</span>
+            <p style="font-weight:700; letter-spacing:1px; color:var(--diamond);">Hacker game</p>
+            <small style="color:#555;">Costs 10 💎</small>
+        </div>
+        <div class="card" onclick="playBug()">
+            <span class="icon">🤖</span>
+            <p style="font-weight:700; letter-spacing:1px; color:var(--diamond);">glich game</p>
+            <small style="color:#555;">Costs 10 💎</small>
+        </div>
+        <div class="card" onclick="playTile()">
+            <span class="icon">🫆</span>
+            <p style="font-weight:700; letter-spacing:1px; color:var(--diamond);">Tile game</p>
+            <small style="color:#555;">Costs 10 💎</small>
+        </div>
+
+
+
+    </div>
+
+    <script>
+    // ระบบเสียงตอนเข้าเกม
+function playEntranceSound() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    // เสียงแบบ Cyber/Digital Rise
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.5);
+    
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.5);
+
+    // หน่วงเวลาเล็กน้อยเพื่อให้เสียงเล่นจบก่อนเปลี่ยนหน้า
+    setTimeout(() => {
+        window.location.href = 'puzzle.html';
+    }, 400);
+}
+        const firebaseConfig = {
+            apiKey: "AIzaSyA21Am8gAcwgzaB2UfTsCCyRa6NpquAGTA",
+            authDomain: "webgame-fb202.firebaseapp.com",
+            databaseURL: "https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "webgame-fb202",
+            storageBucket: "webgame-fb202.firebasestorage.app",
+            messagingSenderId: "325793223841",
+            appId: "1:325793223841:web:ed3c2e50cebd389dc48ce0"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const user = localStorage.getItem("username") || "Guest";
+        document.getElementById('display-name').innerText = user;
+
+        const userRef = database.ref('players/' + user);
+        
+        userRef.update({ status: "Online" });
+
+        userRef.on('value', (snap) => {
+            const data = snap.val();
+            if (data) document.getElementById('d-count').innerText = (data.diamonds || 0).toLocaleString();
+            else userRef.update({ diamonds: 0 });
+        });
+
+        if (user.toLowerCase() === "admin") {
+            document.getElementById('display-name').className = "admin-name";
+            document.getElementById('admin-fab').style.display = "flex";
+        }
+
+        // --- เพิ่มระบบเสียง (คงเดิมไว้) ---
+        const sndClick = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
+        document.addEventListener('click', () => {
+            sndClick.play().then(() => { sndClick.pause(); sndClick.currentTime = 0; }).catch(()=>{});
+        }, { once: true });
+
+        function toggleModal(show) {
+            const modal = document.getElementById('admin-modal');
+            if (show) {
+                modal.style.display = 'flex';
+                setTimeout(() => modal.classList.add('active'), 10);
+            } else {
+                modal.classList.remove('active');
+                setTimeout(() => modal.style.display = 'none', 300);
+            }
+        }
+
+        function admModify(amount) {
+            const target = document.getElementById('target-user').value.trim() || user;
+            const targetRef = database.ref('players/' + target);
+            targetRef.once('value').then(snap => {
+                if(!snap.exists()) return alert("User not found!");
+                targetRef.update({ diamonds: (snap.val().diamonds || 0) + amount });
+                alert("Success!");
+            });
+        }
+
+        function admAnnounce() {
+            let msg = prompt("Message:");
+            if(msg) alert("📢 Broadcast Sent: " + msg);
+        }
+
+        function admScan() {
+            const target = document.getElementById('target-user').value.trim() || user;
+            database.ref('players/' + target).once('value').then(snap => {
+                if(snap.exists()) alert("ID: "+target+"\nRegistered: "+(snap.val().reg_date || "Unknown"));
+                else alert("No Data!");
+            });
+        }
+
+        function playGame() {
+            sndClick.currentTime = 0; sndClick.play().catch(()=>{});
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 10) {
+                    userRef.update({ diamonds: d - 10, status: "Playing" }).then(() => {
+                        window.location.href = "clickergame.html";
+                    });
+                } else alert("Not enough diamonds!");
+            });
+        }
+
+        function playMinerTycoon() {
+            sndClick.currentTime = 0; sndClick.play().catch(()=>{});
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 5) {
+                    userRef.update({ diamonds: d - 5, status: "Playing Miner" }).then(() => {
+                        window.location.href = "minertycoon.html";
+                    });
+                } else alert("Not enough diamonds!");
+            });
+        }
+
+        // เพิ่มฟังก์ชันใหม่สำหรับ Runner
+        function playRunner() {
+            sndClick.currentTime = 0; sndClick.play().catch(()=>{});
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 15) {
+                    userRef.update({ diamonds: d - 15, status: "Running" }).then(() => {
+                        window.location.href = "runner.html";
+                    });
+                } else alert("Not enough diamonds!");
+            });
+        }
+
+        function logout() {
+            userRef.update({ status: "Offline" }).then(() => {
+                localStorage.removeItem("username");
+                window.location.href = "index.html";
+            });
+        }
+            function playDefender() {
+            if(typeof sndClick !== 'undefined') {
+                sndClick.currentTime = 0; 
+                sndClick.play().catch(()=>{});
+            }
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 30) {
+                    userRef.update({ 
+                        diamonds: d - 30, 
+                        status: "Defending Base" 
+                    }).then(() => {
+                        window.location.href = "defender.html";
+                    });
+                } else {
+                    alert("เพชรไม่พอ! (ต้องการ 30 💎)");
+                }
+            });
+        }
+            function playGalacticMiner() {
+            if(typeof sndClick !== 'undefined') {
+                sndClick.currentTime = 0; 
+                sndClick.play().catch(()=>{});
+            }
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 20) {
+                    userRef.update({ 
+                        diamonds: d - 20, 
+                        status: "Mining in Space" 
+                    }).then(() => {
+                        window.location.href = "galactic_miner.html";
+                    });
+                } else {
+                    alert("เพชรไม่พอ! (ต้องการ 20 💎)");
+                }
+            });
+        }
+            function playNeonSurvival() {
+            if(typeof sndClick !== 'undefined') {
+                sndClick.currentTime = 0; 
+                sndClick.play().catch(()=>{});
+            }
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 10) {
+                    userRef.update({ 
+                        diamonds: d - 10, 
+                        status: "Surviving Neon" 
+                    }).then(() => {
+                        // เปลี่ยนชื่อไฟล์ให้ตรงกับที่นายตั้งไว้ (เช่น neon_survival.html)
+                        window.location.href = "neon_survival.html"; 
+                    });
+                } else {
+                    alert("เพชรไม่พอ! (ต้องการ 10 💎)");
+                }
+            });
+        }
+    function playSlot() {
+            if(typeof sndClick !== 'undefined') {
+                sndClick.currentTime = 0; 
+                sndClick.play().catch(()=>{});
+            }
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 10) {
+                    userRef.update({ 
+                        diamonds: d - 10, 
+                        status: "Surviving Neon" 
+                    }).then(() => {
+                        // เปลี่ยนชื่อไฟล์ให้ตรงกับที่นายตั้งไว้ (เช่น neon_survival.html)
+                        window.location.href = "slot777.html"; 
+                    });
+                } else {
+                    alert("เพชรไม่พอ! (ต้องการ 10 💎)");
+                }
+            });
+        }
+    function playHacker() {
+            if(typeof sndClick !== 'undefined') {
+                sndClick.currentTime = 0; 
+                sndClick.play().catch(()=>{});
+            }
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 10) {
+                    userRef.update({ 
+                        diamonds: d - 10, 
+                        status: "Surviving Neon" 
+                    }).then(() => {
+                        // เปลี่ยนชื่อไฟล์ให้ตรงกับที่นายตั้งไว้ (เช่น neon_survival.html)
+                        window.location.href = "hacker.html"; 
+                    });
+                } else {
+                    alert("เพชรไม่พอ! (ต้องการ 10 💎)");
+                }
+            });
+        }
+    function playBug() {
+            if(typeof sndClick !== 'undefined') {
+                sndClick.currentTime = 0; 
+                sndClick.play().catch(()=>{});
+            }
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 10) {
+                    userRef.update({ 
+                        diamonds: d - 10, 
+                        status: "Surviving Neon" 
+                    }).then(() => {
+                        // เปลี่ยนชื่อไฟล์ให้ตรงกับที่นายตั้งไว้ (เช่น neon_survival.html)
+                        window.location.href = "bug.html"; 
+                    });
+                } else {
+                    alert("เพชรไม่พอ! (ต้องการ 10 💎)");
+                }
+            });
+        }
+    function playTile() {
+            if(typeof sndClick !== 'undefined') {
+                sndClick.currentTime = 0; 
+                sndClick.play().catch(()=>{});
+            }
+            userRef.once('value').then(snap => {
+                let d = snap.val() ? (snap.val().diamonds || 0) : 0;
+                if(d >= 10) {
+                    userRef.update({ 
+                        diamonds: d - 10, 
+                        status: "Surviving Neon" 
+                    }).then(() => {
+                        // เปลี่ยนชื่อไฟล์ให้ตรงกับที่นายตั้งไว้ (เช่น neon_survival.html)
+                        window.location.href = "TileMerge.html"; 
+                    });
+                } else {
+                    alert("เพชรไม่พอ! (ต้องการ 10 💎)");
+                }
+            });
+        }
+
+
+
+    </script>
+</body>
+</html>

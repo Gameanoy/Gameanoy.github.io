@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Cyber Jumper - Bug Hunters</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root { --neon-cyan: #00f2ff; --neon-red: #ff0055; --neon-blue: #0044ff; --neon-green: #39ff14; --neon-yellow: #fff200; --bg-dark: #020205; }
+        body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; background: var(--bg-dark); overflow: hidden; touch-action: none; font-family: 'Orbitron', sans-serif; }
+        #gameCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
+
+        .home-container { position: fixed; top: 20px; left: 20px; z-index: 110; pointer-events: auto; }
+        .btn-home { width: 50px; height: 50px; border-color: var(--neon-yellow); color: var(--neon-yellow); font-size: 20px; text-decoration: none; }
+
+        .game-stats {
+            position: fixed; top: 20px; right: 20px; text-align: right; color: var(--neon-green);
+            z-index: 100; font-size: 18px; text-shadow: 0 0 10px var(--neon-green);
+            pointer-events: none;
+        }
+
+        /* --- Death Overlay --- */
+        #death-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 200; color: var(--neon-red); text-align: center;
+        }
+        #death-screen h1 { font-size: 10vmin; margin: 0; text-shadow: 0 0 20px var(--neon-red); }
+        #death-screen p { color: white; font-size: 4vmin; margin: 20px 0; }
+        .btn-skip {
+            padding: 15px 40px; border: 2px solid var(--neon-cyan);
+            background: transparent; color: var(--neon-cyan);
+            font-family: 'Orbitron'; cursor: pointer; border-radius: 10px;
+        }
+
+        .ui-overlay {
+            position: fixed; bottom: 0; left: 0; width: 100%; padding: 4vw; box-sizing: border-box;
+            display: flex; justify-content: space-between; align-items: flex-end; z-index: 100; pointer-events: none;
+        }
+        .dpad-container { display: flex; gap: 3vw; pointer-events: auto; }
+        .action-container { display: flex; flex-direction: column; gap: 15px; pointer-events: auto; align-items: center; }
+        .action-row { display: flex; gap: 3vw; align-items: flex-end; }
+        .cyber-btn { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px); border: 2px solid; border-radius: 15%; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s; color: white; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        .cyber-btn:active { transform: scale(0.9); filter: brightness(1.5); }
+        .dpad-btn { width: 15vmin; height: 15vmin; min-width: 60px; min-height: 60px; max-width: 90px; max-height: 90px; border-color: var(--neon-cyan); color: var(--neon-cyan); font-size: 5vmin; }
+        .action-btn { width: 16vmin; height: 16vmin; min-width: 75px; min-height: 75px; max-width: 110px; max-height: 110px; text-transform: uppercase; font-size: 2vmin; font-weight: bold; }
+        .btn-glitch { border-color: var(--neon-red); color: var(--neon-red); }
+        .btn-jump { border-color: var(--neon-blue); color: var(--neon-blue); }
+        .btn-shoot { border-color: var(--neon-green); color: var(--neon-green); }
+        .btn-icon { font-size: 6vmin; }
+        .shake { animation: screen-shake 0.15s; }
+        @keyframes screen-shake { 0% { transform: translate(2px, 2px); } 50% { transform: translate(-2px, -2px); } 100% { transform: translate(0, 0); } }
+    </style>
+</head>
+<body>
+    <div id="admin-container" style="position: fixed; top: 20px; left: 80px; z-index: 999; pointer-events: auto;">
+    <button id="admin-trigger" onclick="toggleAdminMenu()" style="display: none; background: rgba(0,0,0,0.7); border: 2px solid #ffcc00; color: #ffcc00; padding: 10px; font-family: 'Orbitron'; cursor: pointer; border-radius: 8px; box-shadow: 0 0 10px #ffcc00;">⚙️ ADMIN</button>
+    
+    <div id="admin-menu" style="display: none; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.9); border: 2px solid #ffcc00; padding: 15px; margin-top: 10px; border-radius: 10px; font-family: 'Orbitron'; min-width: 150px;">
+        <button onclick="toggleGodMode()" style="background: transparent; border: 1px solid #ffcc00; color: #ffcc00; padding: 5px; cursor: pointer; font-size: 10px; text-align: left;">🛡️ GOD MODE: <span id="god-status">OFF</span></button>
+        <button onclick="enemies = [];" style="background: transparent; border: 1px solid #ffcc00; color: #ffcc00; padding: 5px; cursor: pointer; font-size: 10px; text-align: left;">💣 CLEAR BUGS</button>
+        <button onclick="wave++; enemies = []; spawnWave();" style="background: transparent; border: 1px solid #ffcc00; color: #ffcc00; padding: 5px; cursor: pointer; font-size: 10px; text-align: left;">⏭️ NEXT WAVE</button>
+    </div>
+</div>
+
+
+<div id="death-screen">
+    <h1>SYSTEM HALTED</h1>
+    <p>REBOOTING IN <span id="timer">5</span>...</p>
+    <button class="btn-skip" onclick="resetGame()">SKIP (REBOOT NOW)</button>
+</div>
+
+<div class="home-container">
+    <div class="cyber-btn btn-home" onclick="window.location.href='gamehub.html'">🏠</div>
+</div>
+
+<div class="game-stats">
+    WAVE: <span id="wave-val">1</span><br>
+    BUGS: <span id="bug-val">0</span>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="ui-overlay">
+    <div class="dpad-container">
+        <div class="cyber-btn dpad-btn" id="ctrl-left">◀</div>
+        <div class="cyber-btn dpad-btn" id="ctrl-right">▶</div>
+    </div>
+    <div class="action-container">
+        <div class="cyber-btn action-btn btn-shoot" id="ctrl-shoot">
+            <span class="btn-icon">🎯</span><span>shoot</span>
+        </div>
+        <div class="action-row">
+            <div class="cyber-btn action-btn btn-glitch" id="ctrl-glitch">
+                <span class="btn-icon">⚡</span><span>glitch</span>
+            </div>
+            <div class="cyber-btn action-btn btn-jump" id="ctrl-jump">
+                <span class="btn-icon">▲</span><span>jump</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+    const resize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
+    window.addEventListener('resize', resize); resize();
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        if (type === 'jump') { osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); gain.gain.setValueAtTime(0.1, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.1); }
+        else if (type === 'shoot') { osc.type = 'square'; osc.frequency.setValueAtTime(1000, audioCtx.currentTime); gain.gain.setValueAtTime(0.03, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.05); }
+        else if (type === 'glitch') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); gain.gain.setValueAtTime(0.05, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.2); }
+        else if (type === 'hit') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(50, audioCtx.currentTime); gain.gain.setValueAtTime(0.2, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.3); }
+    }
+
+    const p = { x: 150, y: 300, vx: 0, vy: 0, scaleX: 1, scaleY: 1, speed: 7, jumpF: -18, grav: 0.8, grounded: false, dir: 1, anim: 0, moving: false };
+    
+    let glitchBlocks = [];
+    let bullets = [];
+    let enemies = [];
+    let wave = 1;
+    let isDead = false;
+    let countdownInterval;
+    const keys = { left: false, right: false };
+
+    const bind = (id, start, end) => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!isDead) start(); });
+        el.addEventListener('touchend', (e) => { e.preventDefault(); if(end) end(); });
+    };
+    bind('ctrl-left', () => { keys.left = true; p.dir = -1; }, () => keys.left = false);
+    bind('ctrl-right', () => { keys.right = true; p.dir = 1; }, () => keys.right = false);
+    bind('ctrl-jump', () => { if(p.grounded) { playSound('jump'); p.vy = p.jumpF; p.scaleY = 1.6; p.scaleX = 0.6; p.grounded = false; } });
+    bind('ctrl-glitch', () => spawnGlitch());
+    bind('ctrl-shoot', () => shoot());
+
+    function shoot() {
+        if(isDead) return;
+        playSound('shoot');
+        bullets.push({ x: p.x + 20, y: p.y + 25, vx: p.dir * 10, vy: 0, text: Math.round(Math.random()).toString(), speed: 12 });
+    }
+
+    function spawnGlitch() {
+        if(isDead) return;
+        playSound('glitch');
+        const b = { x: p.x - 45, y: p.y + 60, w: 130, h: 22, life: 1.0 };
+        glitchBlocks.push(b);
+        canvas.classList.add('shake');
+        setTimeout(() => canvas.classList.remove('shake'), 150);
+    }
+
+    function spawnWave() {
+        const count = wave * 3;
+        for(let i=0; i<count; i++) {
+            enemies.push({ x: Math.random() > 0.5 ? -50 : W + 50, y: H - 140 - (Math.random() * 200), speed: 1.5 + (wave * 0.2), size: 30 });
+        }
+    }
+
+    function triggerDeath() {
+        isDead = true;
+        playSound('hit');
+        document.getElementById('death-screen').style.display = 'flex';
+        let count = 5;
+        const timerEl = document.getElementById('timer');
+        timerEl.innerText = count;
+        
+        countdownInterval = setInterval(() => {
+            count--;
+            timerEl.innerText = count;
+            if(count <= 0) resetGame();
+        }, 1000);
+    }
+
+    function resetGame() {
+        clearInterval(countdownInterval);
+        isDead = false;
+        enemies = [];
+        bullets = [];
+        glitchBlocks = [];
+        wave = 1;
+        p.x = 150; p.y = 300; p.vx = 0; p.vy = 0;
+        document.getElementById('death-screen').style.display = 'none';
+        spawnWave();
+    }
+
+    spawnWave();
+
+    function update() {
+        ctx.fillStyle = 'rgba(2, 2, 5, 0.3)'; ctx.fillRect(0, 0, W, H);
+        if(isDead) { requestAnimationFrame(update); return; }
+
+        document.getElementById('wave-val').innerText = wave;
+        document.getElementById('bug-val').innerText = enemies.length;
+
+        p.moving = keys.left || keys.right;
+        if (keys.left) p.vx = -p.speed; else if (keys.right) p.vx = p.speed; else p.vx *= 0.8;
+        p.vy += p.grav; p.x += p.vx; p.y += p.vy;
+        p.scaleX += (1 - p.scaleX) * 0.2; p.scaleY += (1 - p.scaleY) * 0.2;
+
+        let wasGrounded = p.grounded; p.grounded = false;
+        if (p.y + 60 > H - 80) { p.y = H - 140; p.vy = 0; p.grounded = true; if (!wasGrounded) { p.scaleY = 0.5; p.scaleX = 1.5; } }
+
+        glitchBlocks.forEach((b, i) => {
+            b.life -= 0.006;
+            ctx.globalAlpha = b.life; ctx.fillStyle = '#1a0005'; ctx.strokeStyle = '#ff0055';
+            ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1;
+            if (p.vy >= 0 && p.x + 30 > b.x && p.x + 10 < b.x + b.w && p.y + 60 >= b.y && p.y + 60 <= b.y + b.h + 10) {
+                p.y = b.y - 60; p.vy = 0; p.grounded = true;
+            }
+            if (b.life <= 0) glitchBlocks.splice(i, 1);
+        });
+
+        enemies.forEach((en, i) => {
+            let dx = (p.x + 20) - en.x; let dy = (p.y + 30) - en.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            en.x += (dx/dist) * en.speed; en.y += (dy/dist) * en.speed;
+            ctx.fillStyle = (Math.random() > 0.1) ? '#ff0055' : '#39ff14';
+            ctx.shadowBlur = 10; ctx.shadowColor = '#ff0055';
+            ctx.fillRect(en.x, en.y, en.size, en.size);
+            if (dist < 40) triggerDeath();
+        });
+
+        bullets.forEach((b, bi) => {
+            let target = null; let minDist = 1000;
+            enemies.forEach(en => {
+                let dx = en.x - b.x; let dy = en.y - b.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist < minDist) { minDist = dist; target = en; }
+            });
+            if (target) {
+                let dx = (target.x + 15) - b.x; let dy = (target.y + 15) - b.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                b.vx += (dx/dist) * 1.5; b.vy += (dy/dist) * 1.5;
+                let speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+                b.vx = (b.vx/speed) * b.speed; b.vy = (b.vy/speed) * b.speed;
+            }
+            b.x += b.vx; b.y += b.vy;
+            ctx.fillStyle = '#39ff14'; ctx.font = 'bold 24px Orbitron';
+            ctx.fillText(b.text, b.x, b.y);
+            enemies.forEach((en, ei) => {
+                if (b.x > en.x && b.x < en.x + en.size && b.y > en.y && b.y < en.y + en.size) {
+                    enemies.splice(ei, 1); bullets.splice(bi, 1);
+                }
+            });
+            if (b.x < -100 || b.x > W + 100 || b.y < -100 || b.y > H + 100) bullets.splice(bi, 1);
+        });
+
+        if (enemies.length === 0 && !isDead) { wave++; spawnWave(); }
+        drawStickman(p);
+        requestAnimationFrame(update);
+    }
+
+    function drawStickman(p) {
+        ctx.save(); ctx.translate(p.x + 20, p.y + 60); ctx.scale(p.scaleX, p.scaleY); ctx.translate(0, -60);
+        ctx.strokeStyle = '#00f2ff'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.shadowBlur = 15; ctx.shadowColor = '#00f2ff';
+        let walk = p.moving ? Math.sin(p.anim * 0.2) * 15 : 0; p.anim++;
+        ctx.beginPath(); ctx.arc(0, 10, 7, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 17); ctx.lineTo(0, 42); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 42); ctx.lineTo(walk * p.dir, 58); ctx.moveTo(0, 42); ctx.lineTo(-walk * p.dir, 58); ctx.stroke();
+        ctx.restore();
+    }
+
+    update();
+    // --- [ADMIN LOGIC] - วางไว้ล่างสุดของ Script เดิม ---
+let isGodMode = false;
+
+// เช็คชื่อ Admin
+if(localStorage.getItem('username') === "Admin") {
+    document.getElementById('admin-trigger').style.display = 'block';
+}
+
+function toggleAdminMenu() {
+    const m = document.getElementById('admin-menu');
+    m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+}
+
+function toggleGodMode() {
+    isGodMode = !isGodMode;
+    document.getElementById('god-status').innerText = isGodMode ? "ON" : "OFF";
+    document.getElementById('god-status').style.color = isGodMode ? "#39ff14" : "#ff0055";
+}
+
+// *** วิธีทำให้ God Mode ใช้ได้โดยไม่เปลี่ยนโค้ดเดิม ***
+// เราจะใช้การ "เขียนทับ" ฟังก์ชัน triggerDeath ของเดิมแบบชั่วคราว
+const originalDeath = triggerDeath; 
+window.triggerDeath = function() {
+    if (isGodMode) return; // ถ้าเปิดโหมดพระเจ้า จะไม่ทำอะไรเลย
+    originalDeath(); // ถ้าไม่ได้เปิด ให้ไปเรียกใช้ฟังก์ชันตายตัวเดิมของคุณ
+};
+    
+
+</script>
+</body>
+</html>

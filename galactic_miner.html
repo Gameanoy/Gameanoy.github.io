@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Galactic Miner - Ultimate Admin Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <style>
+        :root { --p: #00f2ff; --s: #bc13fe; --bg: #02020a; --gold: #ffcc00; --nova: #ff3300; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; user-select: none; }
+        body { background: var(--bg); color: white; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+        /* Space Background */
+        #space { position: fixed; width: 100%; height: 100%; z-index: -1; background: radial-gradient(circle at center, #1a1a3e 0%, #02020a 100%); }
+        .star { position: absolute; background: white; border-radius: 50%; opacity: 0.5; animation: twinkle 2s infinite; }
+        @keyframes twinkle { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+        /* UI Header */
+        .header { padding: 15px; display: flex; justify-content: space-between; background: rgba(255,255,255,0.03); backdrop-filter: blur(15px); border-bottom: 1px solid rgba(0, 242, 255, 0.2); }
+        .stat-val { font-size: 1.3rem; font-weight: 900; color: var(--p); text-shadow: 0 0 10px var(--p); }
+        
+        /* Nova Gauge */
+        #nova-container { width: 100%; height: 6px; background: #111; position: relative; overflow: hidden; }
+        #nova-bar { width: 0%; height: 100%; background: linear-gradient(90deg, var(--p), var(--nova)); transition: width 0.3s; }
+
+        /* Planet & FX */
+        .game-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        #planet-container { position: relative; width: 200px; height: 200px; }
+        #planet {
+            width: 100%; height: 100%; border-radius: 50%;
+            background: url('https://www.transparenttextures.com/patterns/carbon-fibre.png'), linear-gradient(135deg, var(--s), #1a1a3e);
+            box-shadow: inset -15px -15px 50px rgba(0,0,0,0.8), 0 0 30px rgba(188, 19, 254, 0.2);
+            cursor: pointer; animation: rotatePlanet 25s linear infinite; transition: transform 0.05s;
+        }
+        @keyframes rotatePlanet { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        #planet:active { transform: scale(0.92); }
+        .nova-active #planet { box-shadow: 0 0 60px var(--nova); filter: hue-rotate(280deg); animation: rotatePlanet 5s linear infinite; }
+
+        /* Floating Text */
+        .float-text { position: absolute; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 100; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-100px) scale(1.4); } }
+
+        /* Menu */
+        .menu { height: 38vh; background: rgba(5, 5, 15, 0.9); backdrop-filter: blur(20px); border-top: 2px solid var(--p); padding: 15px; overflow-y: auto; border-radius: 30px 30px 0 0; }
+        .up-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px 18px; border-radius: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .up-btn { background: var(--p); color: #001; border: none; padding: 10px 18px; border-radius: 14px; font-weight: 900; box-shadow: 0 4px 10px rgba(0,242,255,0.2); }
+        .up-btn:disabled { background: #333; color: #777; box-shadow: none; }
+
+        .save-msg { position: fixed; bottom: 40vh; left: 50%; transform: translateX(-50%); background: var(--p); color: #000; padding: 5px 15px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; display: none; z-index: 200; }
+
+        /* --- Admin Panel CSS --- */
+        .admin-fab {
+            position: fixed; bottom: 15px; right: 15px;
+            width: 40px; height: 40px; background: #ff0033;
+            border-radius: 50%; display: none; justify-content: center;
+            align-items: center; font-size: 1.2rem; cursor: pointer;
+            box-shadow: 0 0 15px rgba(255, 0, 51, 0.4); z-index: 1001;
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .admin-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(10px);
+            display: none; justify-content: center; align-items: center; z-index: 2000;
+            opacity: 0; transition: 0.3s;
+        }
+        .admin-modal.active { opacity: 1; display: flex; }
+        .admin-box {
+            background: rgba(20, 5, 5, 0.95); border: 1px solid #ff3333;
+            width: 90%; max-width: 350px; padding: 25px; border-radius: 30px;
+            text-align: center; transform: translateY(20px); transition: 0.3s;
+        }
+        .admin-modal.active .admin-box { transform: translateY(0); }
+        .adm-input-group { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 20px; margin-bottom: 15px; text-align: left; }
+        .adm-input-group label { font-size: 0.7rem; color: #888; display: block; margin-bottom: 5px; }
+        .adm-input { width: 100%; background: #000; border: 1px solid #ff3333; color: #fff; padding: 8px; border-radius: 10px; margin-bottom: 10px; font-weight: bold; }
+        .adm-btn {
+            width: 100%; padding: 12px; margin: 5px 0; border: none;
+            border-radius: 15px; background: rgba(255,255,255,0.05);
+            color: #ff3333; font-weight: bold; cursor: pointer;
+            border: 1px solid rgba(255, 51, 51, 0.2); transition: 0.2s;
+        }
+        .adm-btn:active { background: #ff3333; color: #fff; }
+    </style>
+</head>
+<body id="main-body">
+
+<div id="space"></div>
+<div id="save-indicator" class="save-msg">CLOUD SYNCING...</div>
+
+<div class="header">
+    <div>
+        <div class="stat-val" id="ore-display">0</div>
+        <small style="color:#888;">Ore Collected</small>
+    </div>
+    <div style="text-align:right">
+        <div style="font-weight:bold; color:#0f0;">💎 <span id="dia-display">0</span></div>
+        <button onclick="exitGame()" style="background:none; border:1px solid #ff3333; color:#ff3333; padding:4px 10px; border-radius:8px; margin-top:5px; font-size:0.7rem;">SAVE & EXIT</button>
+    </div>
+</div>
+
+<div id="nova-container"><div id="nova-bar"></div></div>
+
+<div class="game-area">
+    <div id="planet-container"><div id="planet" onclick="mine(event)"></div></div>
+    <div id="status-msg" style="margin-top:20px; font-size:0.8rem; letter-spacing:1px; color:var(--p);">ENERGY: <span id="nova-text">READY</span></div>
+</div>
+
+<div class="menu">
+    <div class="up-card">
+        <div><strong>Plasma Drill</strong><br><small>Lv.<span id="d-lv">1</span> (+<span id="d-pwr">1</span>)</small></div>
+        <button class="up-btn" id="btn-drill" onclick="buyDrill()">💰 <span id="d-cost">50</span></button>
+    </div>
+    <div class="up-card">
+        <div><strong>Drone Swarm</strong><br><small>Auto: <span id="b-pwr">0</span>/sec</small></div>
+        <button class="up-btn" id="btn-bot" onclick="buyBot()">💰 <span id="b-cost">150</span></button>
+    </div>
+    <div class="up-card">
+        <div><strong>Lucky Lens</strong><br><small>Crit: <span id="crit-rate">5</span>%</small></div>
+        <button class="up-btn" id="btn-crit" onclick="buyCrit()">💰 <span id="c-cost">500</span></button>
+    </div>
+</div>
+
+<div id="admin-fab" class="admin-fab" onclick="toggleAdmin(true)">🛡️</div>
+
+<div id="admin-panel" class="admin-modal" onclick="if(event.target==this) toggleAdmin(false)">
+    <div class="admin-box">
+        <h2 style="color:#ff3333; margin-bottom: 15px; letter-spacing: 2px;">ADMIN CONSOLE</h2>
+        
+        <div class="adm-input-group">
+            <label>ORE AMOUNT</label>
+            <input type="number" id="adm-ore-val" class="adm-input">
+            
+            <label>SHOP PRICES (Drill | Drone | Lens)</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="number" id="adm-price-d" class="adm-input" placeholder="Drill">
+                <input type="number" id="adm-price-b" class="adm-input" placeholder="Drone">
+                <input type="number" id="adm-price-c" class="adm-input" placeholder="Lens">
+            </div>
+            <button class="adm-btn" style="background: var(--p); color:#000; border:none;" onclick="applyAdminEdits()">APPLY REAL-TIME</button>
+        </div>
+
+        <button class="adm-btn" onclick="admNova()">FORCE SUPER NOVA</button>
+        <button class="adm-btn" onclick="admBots()">SUMMON 1K DRONES</button>
+        <button class="adm-btn" style="border:none; color:#555; margin-top:10px;" onclick="toggleAdmin(false)">CLOSE</button>
+    </div>
+</div>
+
+<script>
+    // Firebase Init
+    const fbC={apiKey:"AIzaSyA21Am8gAcwgzaB2UfTsCCyRa6NpquAGTA",authDomain:"webgame-fb202.firebaseapp.com",databaseURL:"https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"webgame-fb202",storageBucket:"webgame-fb202.firebasestorage.app",messagingSenderId:"325793223841",appId:"1:325793223841:web:ed3c2e50cebd389dc48ce0"};
+    firebase.initializeApp(fbC); const db=firebase.database(), usr=localStorage.getItem("username")||"Guest", uRef=db.ref('players/'+usr);
+
+    if(usr.toLowerCase() === "admin") document.getElementById('admin-fab').style.display = 'flex';
+
+    // Game Variables
+    let ore=0, dia=0, dPwr=1, dLv=1, dCst=50, bots=0, bCst=150, crit=5, cCst=500;
+    let novaCharge=0, isNova=false;
+
+    // Load Data
+    uRef.once('value', s => {
+        const d = s.val();
+        if(d && d.minerData) {
+            const m = d.minerData;
+            ore = m.ore || 0; dPwr = m.dPwr || 1; dLv = m.dLv || 1;
+            dCst = m.dCst || 50; bots = m.bots || 0; bCst = m.bCst || 150;
+            crit = m.crit || 5; cCst = m.cCst || 500;
+        }
+        dia = (d && d.diamonds) ? d.diamonds : 0;
+        updateUI();
+    });
+
+    function mine(e){
+        let multiplier = isNova ? 3 : 1;
+        let isCrit = Math.random()*100 < crit;
+        let amt = (isCrit ? dPwr*5 : dPwr) * multiplier;
+        ore += amt;
+        if(!isNova) { novaCharge += 2; if(novaCharge >= 100) startNova(); }
+        showFX(e.clientX, e.clientY, `+${amt}`, isCrit ? 'var(--gold)' : (isNova ? 'var(--nova)' : 'var(--p)'));
+        updateUI();
+    }
+
+    function startNova() {
+        if(isNova) return;
+        isNova = true; novaCharge = 100;
+        document.getElementById('main-body').classList.add('nova-active');
+        document.getElementById('nova-text').innerText = "SUPER NOVA ACTIVE!";
+        let timer = setInterval(() => {
+            novaCharge -= 2;
+            document.getElementById('nova-bar').style.width = novaCharge + '%';
+            if(novaCharge <= 0) {
+                clearInterval(timer); isNova = false; novaCharge = 0;
+                document.getElementById('main-body').classList.remove('nova-active');
+                document.getElementById('nova-text').innerText = "READY";
+            }
+        }, 100);
+    }
+
+    function buyDrill(){ if(ore>=dCst){ ore-=dCst; dPwr++; dLv++; dCst=Math.floor(dCst*1.6); updateUI(); } }
+    function buyBot(){ if(ore>=bCst){ ore-=bCst; bots+=2; bCst=Math.floor(bCst*1.8); updateUI(); } }
+    function buyCrit(){ if(ore>=cCst){ ore-=cCst; crit+=1; cCst=Math.floor(cCst*2.5); updateUI(); } }
+
+    setInterval(() => { if(bots>0){ ore += (isNova ? bots*2 : bots); updateUI(); } }, 1000);
+    setInterval(saveToCloud, 30000);
+
+    function saveToCloud() {
+        document.getElementById('save-indicator').style.display = 'block';
+        uRef.update({ minerData: { ore, dPwr, dLv, dCst, bots, bCst, crit, cCst } })
+        .then(() => setTimeout(() => document.getElementById('save-indicator').style.display = 'none', 1000));
+    }
+
+    function updateUI(){
+        document.getElementById('ore-display').innerText = Math.floor(ore).toLocaleString();
+        document.getElementById('dia-display').innerText = dia.toLocaleString();
+        document.getElementById('d-pwr').innerText = dPwr; document.getElementById('d-lv').innerText = dLv; document.getElementById('d-cost').innerText = dCst;
+        document.getElementById('b-pwr').innerText = bots; document.getElementById('b-cost').innerText = bCst;
+        document.getElementById('crit-rate').innerText = crit; document.getElementById('c-cost').innerText = cCst;
+        if(!isNova) document.getElementById('nova-bar').style.width = novaCharge + '%';
+        
+        document.getElementById('btn-drill').disabled = ore < dCst;
+        document.getElementById('btn-bot').disabled = ore < bCst;
+        document.getElementById('btn-crit').disabled = ore < cCst;
+    }
+
+    function showFX(x,y,txt,clr){
+        const el=document.createElement('div'); el.className='float-text';
+        el.style.left=x+'px'; el.style.top=y+'px'; el.style.color=clr;
+        el.innerText=txt; document.body.appendChild(el);
+        setTimeout(()=>el.remove(), 600);
+    }
+
+    function exitGame() {
+        let earned = Math.floor(ore / 100);
+        if(confirm(`ยืนยันการเซฟ? แร่ 100 อันแลกได้ 1 💎\nคุณจะได้เพิ่มอีก ${earned} 💎`)){
+            uRef.update({ diamonds: dia + earned, minerData: { ore: 0, dPwr, dLv, dCst, bots, bCst, crit, cCst }, status: "Idle" })
+            .then(() => window.location.href="gamehub.html");
+        }
+    }
+
+    // --- Admin Logic ---
+    function toggleAdmin(show) {
+        const modal = document.getElementById('admin-panel');
+        if(show) {
+            document.getElementById('adm-ore-val').value = Math.floor(ore);
+            document.getElementById('adm-price-d').value = dCst;
+            document.getElementById('adm-price-b').value = bCst;
+            document.getElementById('adm-price-c').value = cCst;
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('active'), 10);
+        } else {
+            modal.classList.remove('active');
+            setTimeout(() => modal.style.display = 'none', 300);
+        }
+    }
+
+    function applyAdminEdits() {
+        ore = parseFloat(document.getElementById('adm-ore-val').value) || 0;
+        dCst = parseInt(document.getElementById('adm-price-d').value) || 0;
+        bCst = parseInt(document.getElementById('adm-price-b').value) || 0;
+        cCst = parseInt(document.getElementById('adm-price-c').value) || 0;
+        updateUI();
+        alert("Admin: Data Overridden!");
+    }
+
+    function admNova() { startNova(); toggleAdmin(false); }
+    function admBots() { bots += 1000; updateUI(); }
+
+    const sp = document.getElementById('space');
+    for(let i=0; i<40; i++){
+        let s = document.createElement('div'); s.className='star';
+        s.style.width = s.style.height = Math.random()*2+'px';
+        s.style.left = Math.random()*100+'%'; s.style.top = Math.random()*100+'%';
+        sp.appendChild(s);
+    }
+</script>
+</body>
+</html>

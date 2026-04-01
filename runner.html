@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cyber Runner - Optimized</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+
+    <style>
+        :root { --primary: #f806cc; --neon: #00f2ff; --bg: #030308; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; overflow: hidden; }
+        body { background: var(--bg); color: white; text-align: center; overscroll-behavior: none; }
+        #canvas-container { position: relative; width: 100%; height: 75vh; }
+        canvas { display: block; width: 100%; height: 100%; }
+        .ui-panel { padding: 20px; background: rgba(5,5,15,0.95); height: 25vh; border-top: 2px solid rgba(0, 242, 255, 0.2); backdrop-filter: blur(5px); }
+        .score-box { font-size: 1.8rem; font-weight: 900; color: var(--neon); text-shadow: 0 0 15px rgba(0,242,255,0.5); }
+        .back-btn { 
+            display: inline-block; padding: 12px 30px; background: rgba(248, 6, 204, 0.1); 
+            color: white; border-radius: 12px; text-decoration: none; font-weight: bold;
+            border: 1px solid rgba(248, 6, 204, 0.3); margin-top: 15px; transition: 0.2s;
+        }
+        .back-btn:active { transform: scale(0.95); background: var(--primary); }
+    </style>
+</head>
+<body onclick="jump()">
+
+    <div id="canvas-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div class="ui-panel">
+        <div class="score-box">DISTANCE: <span id="score">0</span>m</div>
+        <p style="color: #888; font-size: 0.9rem; margin-top: 5px;">TAP to jump</p>
+        <a href="javascript:void(0)" onclick="exitToHub()" class="back-btn">⬅ HUB</a>
+    </div>
+
+    <script>
+        // ... (Firebase Config คงเดิม) ...
+        const firebaseConfig = {
+            apiKey: "AIzaSyA21Am8gAcwgzaB2UfTsCCyRa6NpquAGTA",
+            authDomain: "webgame-fb202.firebaseapp.com",
+            databaseURL: "https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "webgame-fb202",
+            storageBucket: "webgame-fb202.firebasestorage.app",
+            messagingSenderId: "325793223841",
+            appId: "1:325793223841:web:ed3c2e50cebd389dc48ce0"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const user = localStorage.getItem("username") || "Guest";
+        const userRef = database.ref('players/' + user);
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const dpr = window.devicePixelRatio || 1;
+        const GAME_WIDTH = 480;
+        const GAME_HEIGHT = 320;
+
+        function resize() {
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * 0.75 * dpr;
+            ctx.scale(canvas.width / GAME_WIDTH, canvas.height / GAME_HEIGHT);
+            ctx.imageSmoothingEnabled = false;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        let diamonds = 0;
+        let gameActive = true;
+        let score = 0;
+        let groundY = GAME_HEIGHT - 30;
+
+        const player = {
+            x: 50, y: groundY - 20,
+            w: 20, h: 20,
+            dy: 0, gravity: 0.7, jumpPower: -11,
+            grounded: false,
+            rotation: 0,
+            isFlipping: false
+        };
+
+        const obsConfig = { w: 15, h: 40, speed: 4 };
+        const obstacles = [];
+        const floorLines = [];
+
+        userRef.once('value').then(snap => { diamonds = snap.val().diamonds || 0; });
+
+        function jump() {
+            if (player.grounded && gameActive) {
+                player.dy = player.jumpPower;
+                player.grounded = false;
+                player.isFlipping = true;
+                player.rotation = 0;
+                new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3').play().catch(()=>{});
+            }
+        }
+
+        let frameCount = 0;
+        let nextObstacleSpawn = 100;
+
+        function spawnObstacle() {
+            let lastX = 0;
+            if(obstacles.length > 0) {
+                lastX = obstacles[obstacles.length-1].x;
+            }
+
+            // --- แก้ไข Logic การสร้างสิ่งกีดขวาง ---
+            // สร้างเฉพาะเมื่อสิ่งกีดขวางตัวล่าสุดอยู่ห่างออกไปเกิน 200 พิกเซล
+            // เพื่อให้ผู้เล่นมีช่องว่างในการลงพื้นและเตรียมกระโดดใหม่
+            if (lastX < GAME_WIDTH - 200 || obstacles.length === 0) { 
+                obstacles.push({ x: GAME_WIDTH + 50, y: groundY - obsConfig.h, w: obsConfig.w, h: obsConfig.h });
+                // สุ่มเวลาเกิดใหม่ให้ไม่ซ้ำกัน
+                nextObstacleSpawn = frameCount + 60 + Math.random() * 60; 
+            }
+        }
+
+        function createFloorLines() {
+            for(let i=0; i<GAME_WIDTH; i += 80) floorLines.push({x: i, w: 50});
+        }
+        createFloorLines();
+
+        // --- เพิ่มฟังก์ชัน exitToHub ที่ขาดหายไป ---
+        function exitToHub() {
+            gameActive = false; // หยุด Loop เกม
+            userRef.update({ status: "Online" }).then(() => {
+                window.location.href = "gamehub.html";
+            }).catch(() => {
+                window.location.href = "gamehub.html";
+            });
+        }
+
+        function gameOver() {
+            if(!gameActive) return;
+            gameActive = false;
+            let earned = Math.floor(score / 10); 
+            
+            userRef.update({ diamonds: diamonds + earned }).then(() => {
+                alert("SYSTEM COMPROMISED!\nRun: " + score + "m\nReward: 💎 " + earned);
+                exitToHub();
+            });
+        }
+
+        function loop() {
+            if (!gameActive) return;
+            frameCount++;
+
+            ctx.fillStyle = "#030308";
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            ctx.strokeStyle = "rgba(0, 242, 255, 0.4)"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(GAME_WIDTH, groundY); ctx.stroke();
+
+            ctx.strokeStyle = "rgba(0, 242, 255, 0.2)";
+            ctx.beginPath();
+            floorLines.forEach(line => {
+                line.x -= obsConfig.speed;
+                ctx.moveTo(line.x, groundY + 5); ctx.lineTo(line.x + line.w, groundY + 5);
+                if(line.x + line.w < 0) line.x = GAME_WIDTH;
+            });
+            ctx.stroke();
+
+            player.dy += player.gravity;
+            player.y += player.dy;
+
+            if (player.y >= groundY - player.h) {
+                player.y = groundY - player.h;
+                player.dy = 0; player.grounded = true;
+                player.isFlipping = false;
+            }
+
+            if(player.isFlipping) {
+                player.rotation += 0.2;
+                if(player.rotation >= Math.PI * 2) { player.isFlipping = false; player.rotation = 0; }
+            }
+
+            ctx.save();
+            ctx.translate(player.x + player.w/2, player.y + player.h/2);
+            ctx.rotate(player.rotation);
+            ctx.shadowBlur = 10; ctx.shadowColor = "#00f2ff"; ctx.fillStyle = "#00f2ff";
+            ctx.beginPath();
+            ctx.moveTo(player.w / 2, 0); ctx.lineTo(-player.w / 2, player.h / 2); ctx.lineTo(-player.w / 2, -player.h / 2);
+            ctx.closePath(); ctx.fill();
+            ctx.restore(); ctx.shadowBlur = 0;
+
+            if(frameCount > nextObstacleSpawn) spawnObstacle();
+
+            ctx.fillStyle = "#f806cc"; ctx.shadowBlur = 15; ctx.shadowColor = "#f806cc";
+            for(let i=obstacles.length-1; i>=0; i--){
+                const obs = obstacles[i];
+                obs.x -= obsConfig.speed + (score/200);
+
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+
+                // ตรวจสอบการชน (Collision)
+                if (player.x < obs.x + obs.w && player.x + player.w > obs.x && player.y < obs.y + obs.h && player.y + player.h > obs.y) { 
+                    gameOver(); 
+                }
+
+                if (obs.x + obs.w < 0) obstacles.splice(i, 1);
+            }
+            ctx.shadowBlur = 0;
+
+            if(frameCount % 10 === 0) score++;
+            document.getElementById('score').innerText = score;
+            
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMONA OS v1.0 - Private Terminal</title>
+    <style>
+        :root {
+            --green: #00ff41;
+            --dark-green: #003b00;
+            --bg: #050505;
+            --error: #ff0033;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            background: var(--bg);
+            color: var(--green);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100%; overflow: hidden;
+        }
+
+        /* เอฟเฟกต์หน้าจอ CRT (เส้นสแกน) */
+        .crt-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none; z-index: 10;
+        }
+
+        #terminal {
+            padding: 20px;
+            height: calc(100% - 60px);
+            overflow-y: auto;
+            display: flex; flex-direction: column;
+        }
+
+        .output-line { margin-bottom: 5px; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
+        .error-text { color: var(--error); font-weight: bold; }
+        .admin-text { color: #ffcc00; } /* สีทองสำหรับ Admin */
+
+        .input-area {
+            display: flex; align-items: center;
+            padding: 10px 20px; background: #000;
+            border-top: 1px solid var(--dark-green);
+            position: relative; z-index: 11;
+        }
+
+        .prompt { color: var(--green); margin-right: 10px; font-weight: bold; }
+
+        #user-input {
+            background: transparent; border: none; color: var(--green);
+            font-family: inherit; font-size: 1rem; width: 100%;
+            outline: none; caret-color: var(--green);
+        }
+
+        /* ตารางข้อมูล */
+        .data-table { margin: 10px 0; border-collapse: collapse; width: 100%; max-width: 600px; }
+        .data-table td { padding: 5px 10px; border: 1px solid var(--dark-green); font-size: 0.9rem; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--dark-green); }
+    </style>
+</head>
+<body>
+
+    <div class="crt-overlay"></div>
+
+    <div id="terminal">
+        <div class="output-line">BOOTING SMONA_OS KERNEL [SUCCESS]</div>
+        <div class="output-line">DECRYPTING SYSTEM ACCESS...</div>
+        <div id="login-status" class="output-line"></div>
+        <div class="output-line">----------------------------------------</div>
+        <div class="output-line">ยินดีต้อนรับสู่ระบบ Terminal. พิมพ์ 'help' เพื่อดูคำสั่ง</div>
+    </div>
+
+    <div class="input-area">
+        <span class="prompt" id="current-prompt">guest@smona:~$</span>
+        <input type="text" id="user-input" autofocus autocomplete="off">
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const userInput = document.getElementById('user-input');
+        const loginStatus = document.getElementById('login-status');
+        const promptLabel = document.getElementById('current-prompt');
+        
+        // ตรวจสอบชื่อจาก localStorage
+        const currentUser = localStorage.getItem("username") || "Guest";
+        
+        // ตั้งค่าหน้าจอเริ่มแรกตาม User
+        if(currentUser === "Admin") {
+            loginStatus.innerHTML = `USER: <span class="admin-text">ADMIN_SMONA</span> [ACCESS_GRANTED]`;
+            promptLabel.innerText = `admin@smona_root:#`;
+        } else {
+            loginStatus.innerHTML = `USER: ${currentUser} [LIMITED_ACCESS]`;
+            promptLabel.innerText = `${currentUser.toLowerCase()}@smona:~$`;
+        }
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(freq, type, dur, vol = 0.05) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + dur);
+        }
+
+        function printOutput(text, delay = 0, isError = false) {
+            const line = document.createElement('div');
+            line.className = isError ? 'output-line error-text' : 'output-line';
+            terminal.appendChild(line);
+            
+            if (delay === 0) {
+                line.innerHTML = text;
+            } else {
+                let i = 0;
+                const interval = setInterval(() => {
+                    line.innerText += text[i];
+                    i++;
+                    if (i >= text.length) clearInterval(interval);
+                }, delay);
+            }
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        userInput.addEventListener('keydown', (e) => {
+            playSound(200, 'sine', 0.05);
+            if (e.key === 'Enter') {
+                const rawCmd = userInput.value.trim();
+                const cmd = rawCmd.toLowerCase();
+                printOutput(`${promptLabel.innerText} ${rawCmd}`);
+                processCommand(cmd);
+                userInput.value = '';
+            }
+        });
+
+        function processCommand(cmd) {
+            const args = cmd.split(' ');
+            const mainCmd = args[0];
+
+            switch(mainCmd) {
+                case 'help':
+                    printOutput("--- COMMAND LIST ---");
+                    printOutput("ls            - List internal files");
+                    printOutput("fetch --users - [ADMIN ONLY] Database leak");
+                    printOutput("about         - OS Information");
+                    printOutput("clear         - Clear terminal");
+                    printOutput("exit          - Back to main menu");
+                    break;
+
+                case 'fetch':
+                    if (args[1] === '--users') {
+                        if (currentUser === "Admin") {
+                            printOutput(">> เข้าถึงฐานข้อมูลระดับ ROOT...", 50);
+                            setTimeout(() => {
+                                let tableHTML = `
+                                <table class="data-table">
+                                    <tr style="color:white; font-weight:bold;">
+                                        <td>ID</td><td>USERNAME</td><td>PASSWORD</td><td>STATUS</td>
+                                    </tr>
+                                    <tr><td>001</td><td>Admin</td><td class="admin-text">@Smona99#</td><td>ROOT</td></tr>
+                                    <tr><td>002</td><td>Boss_King</td><td>777888</td><td>PLAYER</td></tr>
+                                    <tr><td>003</td><td>Tester_01</td><td>pass123</td><td>USER</td></tr>
+                                    <tr><td>004</td><td>Unknown</td><td>*****</td><td>UNKNOWN</td></tr>
+                                </table>`;
+                                printOutput(tableHTML);
+                                printOutput("SUCCESS: 4 Records found.");
+                                playSound(800, 'sine', 0.5);
+                            }, 1500);
+                        } else {
+                            playSound(150, 'sawtooth', 0.4, 0.1);
+                            printOutput("ERROR: ACCESS DENIED. ระดับสิทธิ์ของคุณไม่เพียงพอ", 0, true);
+                        }
+                    } else {
+                        printOutput("Usage: fetch --[option] (e.g., fetch --users)");
+                    }
+                    break;
+
+                case 'ls':
+                    printOutput("Directory: /home/smona/system");
+                    printOutput("> secret_notes.txt");
+                    printOutput("> firewall_bypass.exe");
+                    printOutput("> user_database_backup.sql");
+                    break;
+
+                case 'about':
+                    printOutput("System: SMONA_OS v1.0.4 Premium");
+                    printOutput("Region: Vientiane, Laos");
+                    printOutput("Owner: SMONA Developers");
+                    break;
+
+                case 'clear':
+                    terminal.innerHTML = '';
+                    break;
+
+                case 'exit':
+                    window.location.href = "index.html"; // เปลี่ยนเป็นหน้าหลักของคุณ
+                    break;
+
+                case '':
+                    break;
+
+                default:
+                    printOutput(`Unknown command: '${cmd}'. พิมพ์ 'help' เพื่อดูรายการคำสั่ง.`, 0, true);
+            }
+        }
+    </script>
+</body>
+</html>

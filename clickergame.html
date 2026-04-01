@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diamond Clicker - Master Edition (Anti-AFK)</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #f806cc;
+            --diamond: #00f2ff;
+            --bg: #050510;
+            --glass: rgba(255, 255, 255, 0.07);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background: var(--bg);
+            background: radial-gradient(circle at center, #1a1a3e 0%, #050510 100%);
+            color: white; height: 100vh; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; overflow: hidden;
+        }
+
+        /* --- Shop Button --- */
+        .shop-btn {
+            position: absolute; top: 25px; right: 25px;
+            width: 60px; height: 60px; background: var(--primary);
+            border-radius: 20px; display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; cursor: pointer; z-index: 100;
+            box-shadow: 0 0 25px rgba(248, 6, 204, 0.5);
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: var(--transition);
+        }
+        .shop-btn:active { transform: scale(0.85); }
+
+        /* --- Score UI --- */
+        .header { position: absolute; top: 40px; text-align: center; pointer-events: none; }
+        .score-container {
+            font-size: 3rem; font-weight: 900; color: var(--diamond);
+            text-shadow: 0 0 25px rgba(0, 242, 255, 0.5);
+            display: flex; align-items: center; gap: 12px;
+        }
+        #cps-text { color: #00ff88; font-size: 0.9rem; margin-top: 8px; letter-spacing: 1px; font-weight: bold; }
+
+        /* --- Clicker Target --- */
+        .click-target {
+            width: 260px; height: 260px; background: rgba(0, 242, 255, 0.05);
+            border: 4px solid var(--diamond); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 6rem; cursor: pointer; transition: 0.1s;
+            box-shadow: 0 0 50px rgba(0, 242, 255, 0.15);
+            animation: float 4s ease-in-out infinite; user-select: none;
+        }
+        .click-target:active { transform: scale(0.92); filter: brightness(1.4); }
+
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+        /* --- Shop Modal --- */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(12px);
+            z-index: 1000; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s ease;
+        }
+        .modal.active { display: flex; opacity: 1; }
+        .modal-content {
+            background: rgba(15, 10, 30, 0.95); width: 90%; max-width: 420px;
+            padding: 30px; border-radius: 35px; border: 1px solid var(--primary);
+            transform: scale(0.9) translateY(30px); transition: var(--transition);
+        }
+        .modal.active .modal-content { transform: scale(1) translateY(0); }
+
+        .item-card {
+            background: rgba(255,255,255,0.04); padding: 20px; border-radius: 22px;
+            margin-bottom: 15px; display: flex; justify-content: space-between;
+            align-items: center; border: 1px solid rgba(255,255,255,0.08);
+        }
+        .buy-btn {
+            background: var(--diamond); color: #000; border: none;
+            padding: 10px 20px; border-radius: 12px; font-weight: 800; cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .particle {
+            position: absolute; color: var(--diamond); font-weight: 900;
+            pointer-events: none; animation: rise 0.8s ease-out forwards;
+            font-size: 1.8rem; text-shadow: 0 0 10px var(--diamond);
+        }
+        @keyframes rise { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px) scale(1.5); } }
+
+        .back-btn { position: absolute; bottom: 35px; color: #555; text-decoration: none; font-size: 0.9rem; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="shop-btn" onclick="openShop()">🛒</div>
+
+    <div class="header">
+        <div class="score-container">💎 <span id="score">0</span></div>
+        <p id="cps-text">Auto: 0/s | Power: x1</p>
+    </div>
+
+    <div class="click-target" id="main-click">💎</div>
+
+    <div id="shop-modal" class="modal" onclick="if(event.target==this) closeShop()">
+        <div class="modal-content">
+            <h2 style="text-align:center; margin-bottom:25px; color:var(--primary); letter-spacing: 2px;">UPGRADE SHOP</h2>
+            
+            <div class="item-card">
+                <div>
+                    <p style="font-weight: bold;">⚡ Multi-Clicker</p>
+                    <small style="color:#aaa;">เพิ่มพลังการคลิก +1</small>
+                </div>
+                <button class="buy-btn" onclick="buyItem('multi')">50 💎</button>
+            </div>
+
+            <div class="item-card">
+                <div>
+                    <p style="font-weight: bold;">🤖 Auto-Miner</p>
+                    <small style="color:#aaa;">ขุดอัตโนมัติ +1/วินาที</small>
+                </div>
+                <button class="buy-btn" onclick="buyItem('auto')">150 💎</button>
+            </div>
+
+            <button onclick="closeShop()" style="width:100%; background:none; border:none; color:#777; margin-top:15px; cursor:pointer;">CLOSE</button>
+        </div>
+    </div>
+
+    <a onclick="exitGame()" class="back-btn">EXIT TO HUB</a>
+
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA21Am8gAcwgzaB2UfTsCCyRa6NpquAGTA",
+            authDomain: "webgame-fb202.firebaseapp.com",
+            databaseURL: "https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "webgame-fb202",
+            storageBucket: "webgame-fb202.firebasestorage.app",
+            messagingSenderId: "325793223841",
+            appId: "1:325793223841:web:ed3c2e50cebd389dc48ce0"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const user = localStorage.getItem("username") || "Guest";
+        const userRef = database.ref('players/' + user);
+
+        // ตั้งสถานะเป็น Playing เมื่อเข้าเกม
+        userRef.update({ status: "Playing" });
+
+        const sndClick = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
+        const sndBuy = new Audio('https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3');
+        const sndError = new Audio('https://assets.mixkit.co/active_storage/sfx/2535/2535-preview.mp3');
+        const sndOpen = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
+
+        function unlockAudio() {
+            [sndClick, sndBuy, sndError, sndOpen].forEach(s => {
+                s.play().then(() => { s.pause(); s.currentTime = 0; }).catch(()=>{});
+            });
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('touchstart', unlockAudio);
+        }
+        document.addEventListener('click', unlockAudio);
+        document.addEventListener('touchstart', unlockAudio);
+
+        let diamonds = 0;
+        let clickPower = 1;
+        let autoRate = 0;
+        let autoMinerInterval = null;
+
+        userRef.on('value', (snap) => {
+            const data = snap.val();
+            if (data) {
+                diamonds = data.diamonds || 0;
+                clickPower = data.clickPower || 1;
+                autoRate = data.autoRate || 0;
+                document.getElementById('score').innerText = Math.floor(diamonds).toLocaleString();
+                document.getElementById('cps-text').innerText = `Auto: ${autoRate}/s | Power: x${clickPower}`;
+            }
+        });
+
+        function startAutoMiner() {
+            if (autoMinerInterval) return;
+            autoMinerInterval = setInterval(() => {
+                if (autoRate > 0) {
+                    diamonds += autoRate;
+                    userRef.update({ diamonds: diamonds });
+                }
+            }, 1000);
+        }
+
+        function stopAutoMiner() {
+            clearInterval(autoMinerInterval);
+            autoMinerInterval = null;
+        }
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) stopAutoMiner();
+            else startAutoMiner();
+        });
+
+        startAutoMiner();
+
+        document.getElementById('main-click').addEventListener('click', (e) => {
+            diamonds += clickPower;
+            userRef.update({ diamonds: diamonds });
+            sndClick.currentTime = 0;
+            sndClick.play().catch(()=>{});
+            createParticle(e.clientX, e.clientY, `+${clickPower}`);
+        });
+
+        function createParticle(x, y, text) {
+            const p = document.createElement('div');
+            p.className = 'particle'; p.innerText = text;
+            p.style.left = x + 'px'; p.style.top = y + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 800);
+        }
+
+        function openShop() {
+            sndOpen.currentTime = 0;
+            sndOpen.play().catch(()=>{});
+            const m = document.getElementById('shop-modal');
+            m.style.display = 'flex';
+            setTimeout(() => m.classList.add('active'), 10);
+        }
+
+        function closeShop() {
+            const m = document.getElementById('shop-modal');
+            m.classList.remove('active');
+            setTimeout(() => m.style.display = 'none', 300);
+        }
+
+        function buyItem(type) {
+            if (type === 'multi' && diamonds >= 50) {
+                userRef.update({ diamonds: diamonds - 50, clickPower: clickPower + 1 });
+                sndBuy.play().catch(()=>{});
+            } else if (type === 'auto' && diamonds >= 150) {
+                userRef.update({ diamonds: diamonds - 150, autoRate: autoRate + 1 });
+                sndBuy.play().catch(()=>{});
+            } else {
+                sndError.play().catch(()=>{});
+                alert("เพชรไม่พอ!");
+            }
+        }
+
+        // ฟังก์ชันล้างสถานะก่อนออก
+        function exitGame() {
+            stopAutoMiner();
+            userRef.update({ status: "Online" }).then(() => {
+                window.location.href = "gamehub.html";
+            });
+        }
+    </script>
+</body>
+</html>

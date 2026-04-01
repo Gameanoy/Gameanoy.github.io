@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cyber Defender - Strategy Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+
+    <style>
+        :root { 
+            --primary: #00f2ff; 
+            --enemy-reg: #00ff88; 
+            --enemy-fast: #ffcc00;
+            --enemy-tank: #ff3300;
+            --boss-color: #ff00ff;
+            --bg: #010108; 
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; overflow: hidden; touch-action: none; }
+        body { background: var(--bg); color: white; text-align: center; }
+
+        #game-container { position: relative; width: 100%; height: 72vh; }
+        canvas { display: block; background: radial-gradient(circle at center, #0a0a25 0%, #010108 100%); width: 100%; height: 100%; border-bottom: 2px solid var(--primary); }
+        
+        /* UI Elements */
+        #boss-ui { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 80%; display: none; z-index: 50; }
+        .boss-bar-bg { width: 100%; height: 12px; background: rgba(255,0,255,0.2); border: 1px solid var(--boss-color); border-radius: 6px; overflow: hidden; box-shadow: 0 0 15px var(--boss-color); }
+        #boss-hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ff00ff, #7a00ff); transition: width 0.3s; }
+
+        #wave-alert { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: 2.2rem; font-weight: 900; color: #ff0055; text-shadow: 0 0 20px #ff0055; display: none; z-index: 60; pointer-events: none; animation: alert-flash 0.5s infinite alternate; }
+        @keyframes alert-flash { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0.5; transform: translate(-50%, -50%) scale(1.05); } }
+
+        /* Pause & Buttons */
+        .top-btns { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-between; padding: 0 10px; z-index: 70; }
+        .ui-btn { padding: 8px 15px; background: rgba(0,0,0,0.6); color: var(--primary); border: 1px solid var(--primary); border-radius: 8px; font-weight: bold; font-size: 0.8rem; }
+
+        /* Pause Menu Modal */
+        #pause-menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(1, 1, 8, 0.85); backdrop-filter: blur(8px);
+            display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .menu-box {
+            background: rgba(255, 255, 255, 0.05); border: 1px solid var(--primary);
+            padding: 30px; border-radius: 20px; width: 85%; max-width: 320px;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.2);
+        }
+        .menu-btn {
+            width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 10px;
+            font-weight: 900; font-size: 1rem; cursor: pointer; text-transform: uppercase;
+        }
+        .btn-resume { background: var(--primary); color: #000; }
+        .btn-exit { background: #ff3300; color: #fff; }
+
+        .ui-panel { height: 28vh; padding: 10px; background: linear-gradient(to bottom, #000, #050515); display: flex; flex-direction: column; justify-content: space-around; }
+        .stats { display: flex; justify-content: space-around; font-weight: 900; font-size: 1.1rem; color: var(--primary); }
+        .upgrade-bar { display: flex; justify-content: center; gap: 10px; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="top-btns">
+            <button class="ui-btn" onclick="togglePause()">PAUSE ||</button>
+            <button class="ui-btn" style="color:#ffcc00; border-color:#ffcc00" onclick="toggleRangeDisplay()">RANGE</button>
+        </div>
+
+        <div id="pause-menu">
+            <div class="menu-box">
+                <h2 style="margin-bottom:10px; color:var(--primary)">GAME PAUSED</h2>
+                <p style="color:#ccc; margin-bottom: 20px;">ถ้าออกตอนนี้คุณจะได้รับเพชร:<br><span style="color:#0f0; font-size:1.5rem;">💎 <span id="reward-val">0</span></span></p>
+                <button class="menu-btn btn-resume" onclick="togglePause()">RESUME</button>
+                <button class="menu-btn btn-exit" onclick="confirmExit()">EXIT GAME</button>
+            </div>
+        </div>
+
+        <div id="boss-ui">
+            <div class="boss-name" id="boss-label">COMMAND CARRIER</div>
+            <div class="boss-bar-bg"><div id="boss-hp-fill"></div></div>
+        </div>
+        <div id="wave-alert">BOSS INCOMING!</div>
+        <button id="skipBtn" style="position:absolute; top:60%; left:50%; transform:translate(-50%,-50%); padding:15px 30px; background:#0f0; border-radius:50px; display:none; z-index:80;" onclick="skipWait()">SKIP WAVE</button>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div class="ui-panel">
+        <div class="stats">
+            <div>❤️ <span id="life">10</span></div>
+            <div style="color:var(--enemy-fast)">💰 <span id="gold">100</span></div>
+            <div>WAVE: <span id="wave">1</span></div>
+            <div style="color:var(--primary)">UNIT: <span id="unit-count">0</span>/<span id="max-slots">5</span></div>
+        </div>
+        
+        <div class="upgrade-bar">
+            <span style="font-size:0.9rem; color:#888;">อัพเกรดพื้นที่วาง:</span>
+            <button class="ui-btn" style="color:#0f0; border-color:#0f0;" onclick="upgradeSlots()">💰 <span id="slot-cost">200</span> (+1)</button>
+        </div>
+
+        <div id="timeMsg" style="color:#0f0; font-weight: bold;">READY</div>
+    </div>
+
+    <script>
+        // --- Sound Engine ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let sfxEnabled = true;
+        function playSound(freq, type, duration, vol) {
+            if(!sfxEnabled) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+        const sfx = {
+            shoot: () => playSound(600, 'square', 0.1, 0.05),
+            hit: () => playSound(150, 'sine', 0.05, 0.1),
+            explode: (isBoss) => playSound(isBoss ? 80 : 120, 'sawtooth', isBoss ? 0.8 : 0.3, 0.2),
+            alert: () => { playSound(300, 'triangle', 0.5, 0.2); setTimeout(() => playSound(400, 'triangle', 0.5, 0.2), 500); }
+        };
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA21Am8gAcwgzaB2UfTsCCyRa6NpquAGTA",
+            authDomain: "webgame-fb202.firebaseapp.com",
+            databaseURL: "https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "webgame-fb202",
+            storageBucket: "webgame-fb202.firebasestorage.app",
+            messagingSenderId: "325793223841",
+            appId: "1:325793223841:web:ed3c2e50cebd389dc48ce0"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const user = localStorage.getItem("username") || "Guest";
+        const userRef = database.ref('players/' + user);
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let GAME_W, GAME_H, showRange = true, isPaused = false;
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight * 0.72; GAME_W = canvas.width; GAME_H = canvas.height; }
+        window.addEventListener('resize', resize); resize();
+
+        let diamonds = 0, gold = 100, life = 10, kills = 0, gameActive = true;
+        let maxSlots = 5, currentSlotCost = 200;
+        const towers = [], enemies = [], bullets = [];
+        let currentWave = 1, isWaveActive = false, waveSpawnedCount = 0;
+        let waveInterval, breakTimer, activeBoss = null;
+
+        userRef.once('value').then(snap => { diamonds = snap.val() ? (snap.val().diamonds || 0) : 0; });
+
+        // --- Core Functions ---
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                document.getElementById('reward-val').innerText = Math.floor(kills / 4) + (currentWave * 3);
+            }
+            document.getElementById('pause-menu').style.display = isPaused ? 'flex' : 'none';
+        }
+
+        function confirmExit() {
+            let reward = Math.floor(kills / 4) + (currentWave * 3);
+            gameActive = false;
+            userRef.update({ diamonds: diamonds + reward }).then(() => {
+                window.location.href = "gamehub.html";
+            });
+        }
+
+        function upgradeSlots() {
+            if (gold >= currentSlotCost) {
+                gold -= currentSlotCost;
+                maxSlots++;
+                currentSlotCost = Math.round(currentSlotCost * 1.6);
+                updateUI();
+                playSound(500, 'sine', 0.2, 0.1);
+            }
+        }
+
+        function toggleRangeDisplay() { showRange = !showRange; }
+        function skipWait() { clearInterval(breakTimer); document.getElementById('skipBtn').style.display = 'none'; startWave(); }
+
+        function getTowerColor(level) {
+            const colors = ["#00f2ff", "#ffff00", "#f806cc", "#ff0000"];
+            return colors[Math.min(level-1, colors.length-1)];
+        }
+        function getUpgradeCost(level) { return 80 + (level - 1) * 50; }
+
+        canvas.addEventListener('click', (e) => {
+            if(!gameActive || isPaused) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left);
+            const y = (e.clientY - rect.top);
+            let clickedTower = towers.find(t => Math.hypot(t.x - x, t.y - y) < 30);
+            
+            if (clickedTower) {
+                let cost = getUpgradeCost(clickedTower.level);
+                if (gold >= cost) { 
+                    gold -= cost; 
+                    clickedTower.fireRate = Math.max(5, clickedTower.fireRate - 7); 
+                    clickedTower.level++; 
+                    clickedTower.range += 20; 
+                    playSound(800, 'sine', 0.2, 0.1); 
+                }
+            } else {
+                // ระบบจำกัดจำนวนตัว
+                if (towers.length < maxSlots) {
+                    if (gold >= 50) {
+                        gold -= 50; 
+                        towers.push({ x, y, fireRate: 45, timer: 0, level: 1, range: 160, angle: 0, coreRot: 0 });
+                        playSound(400, 'sine', 0.1, 0.1);
+                    }
+                } else {
+                    alert("พื้นที่เต็ม! อัพเกรด SLOTS ก่อน");
+                }
+            }
+            updateUI();
+        });
+
+        function startWave() {
+            isWaveActive = true; waveSpawnedCount = 0;
+            let total = 8 + (currentWave * 2);
+            document.getElementById('wave').innerText = currentWave;
+            if (currentWave % 5 === 0) {
+                document.getElementById('wave-alert').style.display = 'block'; sfx.alert();
+                setTimeout(() => document.getElementById('wave-alert').style.display = 'none', 2500);
+            }
+            clearInterval(waveInterval);
+            waveInterval = setInterval(() => {
+                if(isPaused) return;
+                if(waveSpawnedCount < total) spawnEnemy();
+                else { clearInterval(waveInterval); isWaveActive = false; }
+            }, Math.max(200, 1000 - (currentWave * 40)));
+        }
+
+        function spawnEnemy() {
+            let type = "reg";
+            if (currentWave % 5 === 0 && waveSpawnedCount === 0) type = "boss";
+            else {
+                let roll = Math.random();
+                if (roll > 0.8) type = "fast";
+                if (roll > 0.92) type = "tank";
+            }
+
+            let e = { x: GAME_W + 100, y: Math.random() * (GAME_H - 120) + 60, type, hitTimer: 0, anim: 0 };
+            
+            let hpScale = 1 + (currentWave * 0.15); 
+            let speedScale = 1 + (currentWave * 0.02);
+
+            if (type === "reg") { e.hp = Math.floor(1 * hpScale); e.speed = 1.6 * speedScale; e.color = "#00ff88"; e.size = 25; }
+            else if (type === "fast") { e.hp = Math.floor(0.8 * hpScale); e.speed = 3.2 * speedScale; e.color = "#ffcc00"; e.size = 20; }
+            else if (type === "tank") { e.hp = Math.floor(6 * hpScale); e.speed = 0.8 * speedScale; e.color = "#ff3300"; e.size = 45; }
+            else if (type === "boss") { 
+                let baseBossHP = 30 + ((currentWave / 5 - 1) * 10); 
+                
+                // --- BOSS WAVE 20+ โหดขึ้นคูณ 2 ---
+                if (currentWave >= 20) {
+                    baseBossHP = baseBossHP * 2;
+                    document.getElementById('boss-label').innerText = "ULTRA BOSS (X2)";
+                } else {
+                    document.getElementById('boss-label').innerText = "COMMAND CARRIER";
+                }
+
+                e.hp = baseBossHP; 
+                e.speed = 0.45 * speedScale; e.color = "#ff00ff"; e.size = 90; 
+                activeBoss = e;
+                document.getElementById('boss-ui').style.display = 'block';
+            }
+            e.maxHp = e.hp; enemies.push(e); waveSpawnedCount++;
+        }
+
+        function onEnemyDeath(e, isBreach = false) {
+            let reward = e.type === "boss" ? (200 + currentWave * 10) : Math.floor(e.maxHp * 3) + 10;
+            gold += reward; kills++; sfx.explode(e.type === "boss");
+            if(isBreach) life--;
+            if(e.type === "boss") { activeBoss = null; document.getElementById('boss-ui').style.display = 'none'; }
+            updateUI();
+            if(life <= 0) gameOver();
+            if (!isWaveActive && enemies.length === 0) {
+                currentWave++;
+                document.getElementById('skipBtn').style.display = 'block';
+                let t = 5;
+                breakTimer = setInterval(() => { if(isPaused) return; t--; document.getElementById('timeMsg').innerText = "NEXT WAVE: " + t; if(t <= 0) skipWait(); }, 1000);
+            }
+        }
+
+        function updateUI() { 
+            document.getElementById('life').innerText = life; 
+            document.getElementById('gold').innerText = gold; 
+            document.getElementById('unit-count').innerText = towers.length;
+            document.getElementById('max-slots').innerText = maxSlots;
+            document.getElementById('slot-cost').innerText = currentSlotCost;
+            if(activeBoss) document.getElementById('boss-hp-fill').style.width = (activeBoss.hp / activeBoss.maxHp * 100) + "%";
+        }
+
+        function drawEnemy(ctx, e) {
+            ctx.save(); ctx.translate(e.x, e.y);
+            ctx.shadowBlur = 15; ctx.shadowColor = e.color;
+            ctx.fillStyle = e.hitTimer > 0 ? "#fff" : e.color;
+            ctx.strokeStyle = "#fff"; ctx.lineWidth = 1;
+
+            if(e.type === "reg") { 
+                ctx.fillRect(-12, -6, 24, 12); ctx.strokeRect(-14, -8, 28, 16); ctx.fillRect(-2, -18, 4, 36);
+            } else if(e.type === "fast") {
+                ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(15, -12); ctx.lineTo(10, 0); ctx.lineTo(15, 12); ctx.closePath(); ctx.fill();
+            } else if(e.type === "tank") {
+                ctx.fillRect(-18, -18, 36, 36); ctx.strokeRect(-20, -20, 40, 40); ctx.fillStyle = "#444"; ctx.fillRect(-25, -5, 15, 10);
+            } else if(e.type === "boss") {
+                e.anim += 0.05; let s = e.size / 2;
+                ctx.beginPath(); ctx.arc(0, 0, s/1.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                for(let i=0; i<4; i++) {
+                    let angle = e.anim + (i * Math.PI/2);
+                    ctx.fillRect(Math.cos(angle)*(s+10)-5, Math.sin(angle)*(s+10)-5, 10, 10);
+                }
+            }
+            ctx.restore();
+        }
+
+        function loop() {
+            if (!gameActive) return;
+            if (!isPaused) {
+                ctx.fillStyle = "#010108"; ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+                towers.forEach(t => {
+                    let towerColor = getTowerColor(t.level);
+                    let upgradeCost = getUpgradeCost(t.level);
+                    ctx.save(); ctx.translate(t.x, t.y);
+                    if (showRange) { ctx.beginPath(); ctx.arc(0, 0, t.range, 0, Math.PI*2); ctx.strokeStyle = "rgba(255, 255, 255, 0.05)"; ctx.stroke(); }
+                    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = towerColor; ctx.lineWidth = 3; ctx.stroke();
+                    ctx.fillStyle = "#fff"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center";
+                    ctx.fillText(`LV.${t.level}`, 0, 38); ctx.fillStyle = gold >= upgradeCost ? "#0f0" : "#f44"; ctx.fillText(`UP: ${upgradeCost}`, 0, 50);
+                    t.coreRot += 0.05; ctx.rotate(t.coreRot); ctx.strokeStyle = towerColor; ctx.setLineDash([4, 4]); ctx.strokeRect(-26, -26, 52, 52); ctx.restore();
+                    
+                    let target = enemies.find(e => Math.hypot(e.x - t.x, e.y - t.y) < t.range);
+                    if(target) t.angle = Math.atan2(target.y - t.y, target.x - t.x);
+                    ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.angle);
+                    ctx.fillStyle = towerColor; ctx.fillRect(8, -10, 20, 6); ctx.fillRect(8, 4, 20, 6); ctx.restore();
+                    t.timer++;
+                    if (t.timer >= t.fireRate && target) { bullets.push({ x: t.x + Math.cos(t.angle)*25, y: t.y + Math.sin(t.angle)*25, angle: t.angle, speed: 12, color: towerColor }); t.timer = 0; sfx.shoot(); }
+                });
+
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    let b = bullets[i]; b.x += Math.cos(b.angle)*b.speed; b.y += Math.sin(b.angle)*b.speed;
+                    ctx.fillStyle = b.color; ctx.fillRect(b.x-5, b.y-2, 10, 4);
+                    enemies.forEach((e, ei) => {
+                        if (Math.hypot(e.x - b.x, e.y - b.y) < e.size/1.5) {
+                            e.hp--; e.hitTimer = 3; sfx.hit(); bullets.splice(i, 1);
+                            if (e.hp <= 0) { enemies.splice(ei, 1); onEnemyDeath(e, false); }
+                        }
+                    });
+                    if (b.x < 0 || b.x > GAME_W || b.y < 0 || b.y > GAME_H) bullets.splice(i, 1);
+                }
+
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    let e = enemies[i]; e.x -= e.speed;
+                    if(e.hitTimer > 0) e.hitTimer--;
+                    drawEnemy(ctx, e);
+                    if(e.hp < e.maxHp && e.type !== "boss"){
+                        ctx.fillStyle="red"; ctx.fillRect(e.x-15, e.y-e.size/1.5 - 12, 30, 3);
+                        ctx.fillStyle="#0f0"; ctx.fillRect(e.x-15, e.y-e.size/1.5 - 12, (e.hp/e.maxHp)*30, 3);
+                    }
+                    if (e.x < -e.size) { enemies.splice(i, 1); onEnemyDeath(e, true); }
+                }
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function gameOver() {
+            gameActive = false; let reward = Math.floor(kills / 4) + (currentWave * 3);
+            userRef.update({ diamonds: diamonds + reward }).then(() => { alert("🔴 DEFENSE BREACHED\nDIAMONDS: " + reward); window.location.href = "gamehub.html"; });
+        }
+        
+        updateUI(); startWave(); loop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Slot777 - Cyber Scroll PRO</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <style>
+        :root { --p: #00ff88; --e: #ff0055; --gold: #ffcc00; --bg: #050510; --reel-h: 120px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; user-select: none; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        
+        body { background: var(--bg); color: white; overflow: hidden; width: 100vw; height: 100vh; display: flex; flex-direction: column; background: radial-gradient(circle at center, #101025 0%, #050510 100%); }
+
+        /* UI Components */
+        .nav-ui { position: absolute; top: 15px; left: 15px; z-index: 100; }
+        .back-btn { background: rgba(255,255,255,0.05); border: 2px solid var(--e); color: var(--e); padding: 10px 20px; border-radius: 12px; font-weight: 900; text-decoration: none; display: flex; align-items: center; box-shadow: 0 0 15px rgba(255, 0, 85, 0.2); }
+        .back-btn:active { transform: scale(0.9); }
+
+        .header { display: flex; justify-content: flex-end; padding: 15px; z-index: 10; }
+        .balance-box { background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 15px; border: 1px solid var(--p); font-weight: bold; box-shadow: 0 0 15px rgba(0,255,136,0.2); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { box-shadow: 0 0 10px rgba(0,255,136,0.2); } 50% { box-shadow: 0 0 25px rgba(0,255,136,0.5); } }
+
+        /* Slot Machine */
+        .slot-container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+        .slot-frame { padding: 15px; background: #111; border-radius: 25px; border: 4px solid #333; position: relative; box-shadow: 0 0 30px rgba(0,0,0,1); transition: 0.5s; }
+        .slot-frame.active-spin { border-color: var(--p); box-shadow: 0 0 60px var(--p); transform: scale(1.02); }
+        .reels-window { display: flex; gap: 10px; clip-path: inset(0 0 0 0 round 15px); }
+        .reel-viewport { width: 90px; height: var(--reel-h); background: #000; border: 2px solid #222; border-radius: 15px; overflow: hidden; position: relative; }
+        .symbol-strip { position: absolute; top: 0; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; transition: 0.8s cubic-bezier(0.15, 0.85, 0.35, 1.15); }
+        .symbol { width: 100%; height: var(--reel-h); display: flex; align-items: center; justify-content: center; font-size: 3.5rem; }
+        
+        .spinning .symbol-strip { animation: reelScroll 0.1s infinite linear; filter: blur(4px); transition: none; }
+        @keyframes reelScroll { 0% { transform: translateY(0); } 100% { transform: translateY(calc(var(--reel-h) * -6)); } }
+
+        /* Controls */
+        .mult-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; width: 90%; max-width: 400px; }
+        .m-btn { background: rgba(255,255,255,0.03); border: 1px solid #444; color: #aaa; padding: 12px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .m-btn.active { background: var(--p); border-color: var(--p); color: #000; box-shadow: 0 0 20px var(--p); transform: scale(1.05); }
+
+        .btn-spin { background: linear-gradient(45deg, var(--e), #ff5500); color: white; border: none; padding: 18px 80px; border-radius: 50px; font-size: 1.5rem; font-weight: 900; box-shadow: 0 0 30px rgba(255, 0, 85, 0.4); cursor: pointer; }
+        .btn-spin:active { transform: scale(0.9); }
+        .btn-spin:disabled { opacity: 0.4; filter: grayscale(1); cursor: not-allowed; }
+        
+        #msg { font-weight: 900; letter-spacing: 2px; height: 25px; text-transform: uppercase; }
+
+        /* --- ADMIN PANEL WITH RESET BUTTON --- */
+        #admin-trigger {
+            position: fixed; bottom: 25px; right: 25px; width: 55px; height: 55px;
+            background: linear-gradient(135deg, var(--gold), #ff8800); border-radius: 50%; display: none;
+            align-items: center; justify-content: center; z-index: 1001; border: 2px solid #fff;
+            box-shadow: 0 0 20px rgba(255, 204, 0, 0.5); cursor: pointer; transition: 0.4s;
+        }
+        #admin-trigger.open { transform: rotate(180deg); background: var(--e); }
+
+        #admin-menu {
+            position: fixed; bottom: 95px; right: 25px; width: 300px; 
+            background: rgba(10, 10, 25, 0.9); backdrop-filter: blur(25px);
+            border: 2px solid var(--gold); border-radius: 25px; padding: 25px;
+            display: none; z-index: 1000; box-shadow: 0 15px 50px #000;
+            transform-origin: bottom right; animation: smoothGrow 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes smoothGrow { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .admin-header { text-align: center; color: var(--gold); font-weight: 900; border-bottom: 1px solid rgba(255,204,0,0.2); padding-bottom: 10px; margin-bottom: 15px; }
+        .admin-label { font-size: 0.7rem; color: #888; font-weight: bold; }
+        .admin-input { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid #444; color: var(--gold); padding: 12px; border-radius: 12px; margin-top: 5px; outline: none; }
+        .admin-btn { background: var(--gold); color: #000; border: none; padding: 12px; border-radius: 12px; width: 100%; font-weight: 900; margin-top: 10px; cursor: pointer; }
+        
+        /* New Reset Button Style */
+        .admin-reset-btn { 
+            background: rgba(255, 0, 85, 0.1); border: 1px solid var(--e); color: var(--e); 
+            padding: 10px; border-radius: 12px; width: 100%; margin-top: 15px; 
+            font-weight: 900; cursor: pointer; font-size: 0.75rem; text-transform: uppercase;
+            letter-spacing: 1px; transition: 0.2s;
+        }
+        .admin-reset-btn:active { background: var(--e); color: white; transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <div class="nav-ui"><a href="gamehub.html" class="back-btn">⬅ BACK</a></div>
+    <div class="header"><div class="balance-box">💎 <span id="balance">10,000</span></div></div>
+
+    <div class="slot-container">
+        <div id="msg">READY TO ROLL</div>
+        <div class="slot-frame" id="frame">
+            <div class="reels-window">
+                <div class="reel-viewport" id="r1-view"><div class="symbol-strip" id="r1-strip"><div class="symbol">7</div><div class="symbol">🍒</div><div class="symbol">🔔</div><div class="symbol">💎</div><div class="symbol">⭐</div><div class="symbol">🔥</div><div class="symbol">7</div></div></div>
+                <div class="reel-viewport" id="r2-view"><div class="symbol-strip" id="r2-strip"><div class="symbol">7</div><div class="symbol">🍒</div><div class="symbol">🔔</div><div class="symbol">💎</div><div class="symbol">⭐</div><div class="symbol">🔥</div><div class="symbol">7</div></div></div>
+                <div class="reel-viewport" id="r3-view"><div class="symbol-strip" id="r3-strip"><div class="symbol">7</div><div class="symbol">🍒</div><div class="symbol">🔔</div><div class="symbol">💎</div><div class="symbol">⭐</div><div class="symbol">🔥</div><div class="symbol">7</div></div></div>
+            </div>
+        </div>
+        <div class="mult-grid">
+            <button class="m-btn active" data-m="1.25" data-win="70">1.25x (70%)</button>
+            <button class="m-btn" data-m="1.50" data-win="60">1.50x (60%)</button>
+            <button class="m-btn" data-m="1.75" data-win="50">1.75x (50%)</button>
+            <button class="m-btn" data-m="2" data-win="40">2x (40%)</button>
+            <button class="m-btn" data-m="3" data-win="20">3x (20%)</button>
+            <button class="m-btn" data-m="4" data-win="10">4x (10%)</button>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:15px;">
+            <input type="number" id="bet-input" value="1000" style="background:#000; border:2px solid #333; color:var(--p); padding:10px; border-radius:10px; text-align:center; width:150px; outline:none;">
+            <button class="btn-spin" id="spin-btn" onclick="startSpin()">SPIN</button>
+        </div>
+    </div>
+
+    <button id="admin-trigger" onclick="toggleAdminMenu()">🛡️</button>
+    <div id="admin-menu">
+        <div class="admin-header">CORE OVERRIDE</div>
+        <div style="margin-bottom:10px;">
+            <span class="admin-label">WIN CHANCE (%)</span>
+            <input type="number" id="adm-win-input" class="admin-input" placeholder="Current: Default">
+            <button class="admin-btn" onclick="applyAdminWin()">APPLY WIN RATE</button>
+            <button class="admin-reset-btn" onclick="resetAdminWin()">⚠️ RESTORE SYSTEM LUCK</button>
+        </div>
+        <hr style="opacity:0.1; margin:15px 0;">
+        <div>
+            <span class="admin-label">INJECT DIAMONDS</span>
+            <input type="number" id="adm-money-input" class="admin-input" value="100000">
+            <button class="admin-btn" onclick="applyAdminMoney()">INJECT MONEY</button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = { databaseURL: "https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const user = localStorage.getItem("username") || "Guest";
+        const userRef = db.ref('players/' + user);
+
+        let balance = 10000;
+        let selectedMult = 1.25;
+        let defaultWinChance = 70;
+        let adminWinChance = null;
+        const reelHeight = 120;
+
+        if(user === "Admin") document.getElementById('admin-trigger').style.display = "flex";
+
+        userRef.on('value', snap => { if(snap.val()) { balance = snap.val().diamonds || 0; document.getElementById('balance').innerText = balance.toLocaleString(); } });
+
+        document.querySelectorAll('.m-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.m-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedMult = parseFloat(btn.dataset.m);
+                defaultWinChance = parseInt(btn.dataset.win);
+                playSfx(440, 'sine', 0.1);
+            }
+        });
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSfx(freq, type, duration, vol = 0.1) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function toggleAdminMenu() {
+            const menu = document.getElementById('admin-menu');
+            const isOpen = menu.style.display === 'block';
+            menu.style.display = isOpen ? 'none' : 'block';
+            document.getElementById('admin-trigger').classList.toggle('open');
+            playSfx(isOpen ? 300 : 800, 'square', 0.2);
+        }
+
+        function applyAdminWin() { 
+            adminWinChance = parseInt(document.getElementById('adm-win-input').value); 
+            playSfx(1200, 'triangle', 0.3); 
+            alert("ADMIN: Win Chance Override Active!");
+        }
+
+        // ฟังก์ชัน Reset อัตราชนะ
+        function resetAdminWin() {
+            adminWinChance = null;
+            document.getElementById('adm-win-input').value = "";
+            playSfx(200, 'sawtooth', 0.5, 0.2); // เสียง Reset แบบต่ำๆ
+            alert("ADMIN: System Luck Restored to Default.");
+        }
+
+        function applyAdminMoney() { 
+            balance += parseInt(document.getElementById('adm-money-input').value); 
+            updateDB(); playSfx(1500, 'sine', 0.5); 
+        }
+
+        function startSpin() {
+            const bet = parseInt(document.getElementById('bet-input').value);
+            if(bet > balance) return alert("ยอดเงินไม่พอ!");
+            
+            const btn = document.getElementById('spin-btn');
+            const frame = document.getElementById('frame');
+            const msg = document.getElementById('msg');
+            const reels = [document.getElementById('r1-view'), document.getElementById('r2-view'), document.getElementById('r3-view')];
+            const strips = [document.getElementById('r1-strip'), document.getElementById('r2-strip'), document.getElementById('r3-strip')];
+
+            btn.disabled = true;
+            balance -= bet; updateDB();
+            frame.classList.add('active-spin');
+            msg.innerText = "ROLLING...";
+            reels.forEach(r => r.classList.add('spinning'));
+
+            let spinInterval = setInterval(() => playSfx(100 + Math.random()*50, 'sawtooth', 0.05, 0.03), 80);
+
+            setTimeout(() => {
+                clearInterval(spinInterval);
+                frame.classList.remove('active-spin');
+                
+                const chance = (adminWinChance !== null) ? adminWinChance : defaultWinChance;
+                const isWin = (Math.random() * 100) <= chance;
+                let results = isWin ? [0,0,0] : [Math.floor(Math.random()*6), Math.floor(Math.random()*6), Math.floor(Math.random()*6)];
+                if(!isWin && results[0]===results[1] && results[1]===results[2]) results[1] = (results[1]+1)%6;
+
+                reels.forEach((r, i) => {
+                    setTimeout(() => {
+                        r.classList.remove('spinning');
+                        strips[i].style.transform = `translateY(-${results[i] * reelHeight}px)`;
+                        playSfx(500 - (i*100), 'square', 0.2, 0.1); 
+                    }, i * 300);
+                });
+
+                setTimeout(() => {
+                    if(isWin) {
+                        const win = Math.floor(bet * selectedMult); balance += win;
+                        msg.innerText = `WIN: +${win}`; msg.style.color = "var(--p)";
+                        [600, 900, 1200].forEach((f, idx) => setTimeout(() => playSfx(f, 'sine', 0.4, 0.2), idx * 100));
+                    } else {
+                        const ref = Math.floor(bet * 0.6); balance += ref;
+                        msg.innerText = `LOSE (REFUND: +${ref})`; msg.style.color = "var(--e)";
+                        playSfx(150, 'sine', 0.5, 0.2);
+                    }
+                    updateDB(); btn.disabled = false;
+                }, 1300);
+            }, 2000);
+        }
+
+        function updateDB() {
+            userRef.update({ diamonds: balance });
+            document.getElementById('balance').innerText = balance.toLocaleString();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ZENITH_PRO: THE HARMONY</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;900&family=Orbitron:wght@400;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="puzzle.css">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="hud-v2">
+        <div class="status-box">
+            <p>SYSTEM_FLOW: <span id="flow-stat">STABLE</span></p>
+            <p>DISTANCE_TO_EXIT: <span id="dist-txt">0m</span></p>
+        </div>
+        <div class="level-indicator">NODE_<span id="lvl-num">01</span></div>
+    </div>
+
+    <div class="mobile-controls">
+        <div class="dir-pad">
+            <div class="touch-btn" id="lBtn">◀</div>
+            <div class="touch-btn" id="rBtn">▶</div>
+        </div>
+        <div class="action-pad">
+            <div class="touch-btn jump" id="jBtn">UP</div>
+        </div>
+    </div>
+
+    <div id="puzzle-screen" class="overlay hidden">
+        <div class="glass-panel">
+            <h2 class="title">RECONNECT_LOGIC</h2>
+            <canvas id="puzzleCanvas"></canvas>
+            <div class="footer-msg">SOLVABLE_SEQUENCE_DETECTED</div>
+            <button class="regen-btn" onclick="initPuzzle()">RE-GENERATE</button>
+        </div>
+    </div>
+
+    <div id="death-screen" class="overlay hidden">
+        <div class="glass-panel death">
+            <h1 class="glow-text">SIGNAL_LOST</h1>
+            <p>SYNC_FAILURE_DETECTED</p>
+            <div class="btn-group">
+                <button class="p-btn" onclick="reboot()">RE-INITIALIZE</button>
+                <button class="s-btn" onclick="location.href='gamehub.html'">TERMINATE</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="puzzle.js"></script>
+</body>
+</html>

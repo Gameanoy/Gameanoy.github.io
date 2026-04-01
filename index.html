@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber System - Ultra Security</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        
+        body {
+            background: #0f0c29;
+            background: radial-gradient(circle, #2e0249 0%, #0f0c29 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: white;
+        }
+
+        .bg-glow {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: rgba(169, 16, 121, 0.2);
+            filter: blur(100px);
+            border-radius: 50%;
+            z-index: -1;
+            animation: pulse 8s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-10%, -10%) scale(1); }
+            100% { transform: translate(10%, 10%) scale(1.2); }
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 25px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        #form-wrapper { transition: all 0.4s ease; }
+        .fade-out { opacity: 0; transform: translateX(-20px); }
+        .fade-in { opacity: 0; transform: translateX(20px); }
+
+        h2 { 
+            color: #f806cc; 
+            margin-bottom: 25px; 
+            text-transform: uppercase; 
+            letter-spacing: 3px;
+            text-shadow: 0 0 15px #f806cc;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        input:focus { 
+            border-color: #f806cc; 
+            box-shadow: 0 0 12px rgba(248, 6, 204, 0.4);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 25px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(45deg, #a91079, #f806cc);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:active { transform: scale(0.97); }
+
+        .switch-btn { margin-top: 20px; color: #bbb; font-size: 0.9rem; }
+        .switch-btn span { color: #f806cc; cursor: pointer; font-weight: bold; text-decoration: underline; }
+
+        .reg-only { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="bg-glow"></div>
+
+    <div class="container">
+        <div id="form-wrapper">
+            <h2 id="title">LOGIN</h2>
+            
+            <input type="text" id="user" placeholder="USERNAME">
+            <input type="password" id="pass" placeholder="PASSWORD">
+            
+            <div id="confirm-area" class="reg-only">
+                <input type="password" id="confirm_pass" placeholder="CONFIRM PASSWORD">
+            </div>
+
+            <button id="btn-action" onclick="handleSubmit()">Log In</button>
+            
+            <p class="switch-btn" id="toggle-text">
+                Don't have an account? <span onclick="toggleMode()">Sign Up</span>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA21Am8gAcwgzaB2UfTsCCyRa6NpquAGTA",
+            authDomain: "webgame-fb202.firebaseapp.com",
+            databaseURL: "https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "webgame-fb202",
+            storageBucket: "webgame-fb202.firebasestorage.app",
+            messagingSenderId: "325793223841",
+            appId: "1:325793223841:web:ed3c2e50cebd389dc48ce0"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        let isLoginMode = true;
+
+        function toggleMode() {
+            const wrapper = document.getElementById('form-wrapper');
+            wrapper.classList.add('fade-out');
+
+            setTimeout(() => {
+                isLoginMode = !isLoginMode;
+                const title = document.getElementById('title');
+                const btn = document.getElementById('btn-action');
+                const confirmArea = document.getElementById('confirm-area');
+                const toggleText = document.getElementById('toggle-text');
+
+                if (isLoginMode) {
+                    title.innerText = "LOGIN";
+                    btn.innerText = "Log In";
+                    confirmArea.style.display = "none";
+                    toggleText.innerHTML = "Don't have an account? <span onclick='toggleMode()'>Sign Up</span>";
+                } else {
+                    title.innerText = "REGISTER";
+                    btn.innerText = "Create Account";
+                    confirmArea.style.display = "block";
+                    toggleText.innerHTML = "Already have an account? <span onclick='toggleMode()'>Log In</span>";
+                }
+
+                wrapper.classList.remove('fade-out');
+                wrapper.classList.add('fade-in');
+                setTimeout(() => wrapper.classList.remove('fade-in'), 10);
+            }, 400);
+        }
+
+        function handleSubmit() {
+            const username = document.getElementById('user').value.trim();
+            const password = document.getElementById('pass').value;
+            const confirmPass = document.getElementById('confirm_pass').value;
+
+            if (!username || !password) {
+                alert("กรุณากรอกข้อมูลให้ครบ!");
+                return;
+            }
+
+            if (isLoginMode) {
+                // --- ระบบ LOGIN ---
+                database.ref('players/' + username).once('value', (snapshot) => {
+                    if (snapshot.exists() && snapshot.val().password === password) {
+                        localStorage.setItem("username", username);
+                        alert("Login Success!");
+                        window.location.href = "gamehub.html";
+                    } else {
+                        alert("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง!");
+                    }
+                });
+            } else {
+                // --- ระบบ REGISTER (เช็คชื่อซ้ำทุกชื่อแบบ Case-Insensitive) ---
+                if (password !== confirmPass) {
+                    alert("รหัสผ่านไม่ตรงกัน!");
+                    return;
+                }
+
+                const pattern = /^[a-zA-Z0-9]+$/;
+                if (!pattern.test(username)) {
+                    alert("Username ต้องเป็นภาษาอังกฤษและตัวเลขเท่านั้น!");
+                    return;
+                }
+
+                // สแกนตรวจสอบชื่อซ้ำในระบบทั้งหมด
+                database.ref('players').once('value', (snapshot) => {
+                    let isDuplicate = false;
+                    
+                    if (snapshot.exists()) {
+                        snapshot.forEach((child) => {
+                            // เทียบชื่อใน DB กับชื่อที่พิมพ์มา โดยเปลี่ยนเป็นตัวพิมพ์เล็กทั้งคู่
+                            if (child.key.toLowerCase() === username.toLowerCase()) {
+                                isDuplicate = true;
+                            }
+                        });
+                    }
+
+                    if (isDuplicate) {
+                        alert("ชื่อผู้ใช้นี้มีคนใช้แล้ว (ไม่สามารถใช้ชื่อที่ซ้ำกันแม้พิมพ์เล็ก/ใหญ่ต่างกัน)!");
+                    } else {
+                        // บันทึกข้อมูลถ้าไม่ซ้ำ
+                        database.ref('players/' + username).set({
+                            username: username,
+                            password: password,
+                            reg_date: new Date().toLocaleString()
+                        }).then(() => {
+                            alert("สมัครสมาชิกสำเร็จ!");
+                            toggleMode();
+                        });
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>

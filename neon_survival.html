@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Survival - Sound Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <style>
+        :root { --p: #00f2ff; --s: #f806cc; --dmg: #ff3333; --bg: #050510; }
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; }
+        body { background: var(--bg); overflow: hidden; font-family: 'Inter', sans-serif; color: white; }
+        canvas { display: block; filter: contrast(1.1) brightness(1.1); }
+
+        /* UI Styling */
+        #top-info { position: absolute; top: 15px; width: 100%; text-align: center; pointer-events: none; z-index: 10; }
+        #death-msg { color: var(--dmg); font-weight: 900; font-size: 1.8rem; display: none; text-shadow: 0 0 20px var(--dmg); animation: blink 0.5s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        .ui-panel { position: absolute; padding: 15px; z-index: 20; }
+        #stat-ui { top: 10px; left: 10px; pointer-events: none; background: rgba(0,0,0,0.3); border-radius: 15px; backdrop-filter: blur(5px); }
+        #pause-btn { top: 15px; right: 15px; background: rgba(255,255,255,0.1); border: 1px solid var(--p); color: var(--p); padding: 10px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+
+        /* Modals */
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        .box { background: #0a0a1a; padding: 35px; border-radius: 30px; border: 2px solid var(--p); text-align: center; width: 85%; max-width: 380px; box-shadow: 0 0 30px rgba(0,242,255,0.2); }
+        .btn { width: 100%; padding: 16px; margin-top: 12px; border: none; border-radius: 15px; font-weight: 800; cursor: pointer; transition: 0.2s; }
+        .btn-rebirth { background: var(--p); color: #000; }
+        .btn-exit { background: #222; color: #888; }
+        .btn-shop { background: linear-gradient(90deg, var(--s), #b002ff); color: white; }
+
+        /* Admin Console */
+        #admin-panel { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(15, 0, 0, 0.98); border: 2px solid #ff0055; border-radius: 25px; z-index: 1000; padding: 20px; }
+        .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; }
+        .btn-cmd { padding: 12px; font-size: 0.75rem; font-weight: bold; border-radius: 12px; border: 1px solid #ff0055; background: transparent; color: #ff0055; cursor: pointer; }
+        .btn-cmd:active { background: #ff0055; color: white; }
+        #admin-fab { position: fixed; bottom: 25px; right: 25px; width: 55px; height: 55px; background: #ff0055; border-radius: 50%; display: none; justify-content: center; align-items: center; z-index: 99; cursor: pointer; box-shadow: 0 0 20px rgba(255, 0, 85, 0.4); }
+
+        #joy-base { position: absolute; width: 120px; height: 120px; background: rgba(255,255,255,0.05); border-radius: 50%; border: 1px solid rgba(0,242,255,0.3); display: none; z-index: 5; }
+        #joy-stick { position: absolute; width: 50px; height: 50px; background: var(--p); border-radius: 50%; top: 35px; left: 35px; box-shadow: 0 0 20px var(--p); }
+    </style>
+</head>
+<body>
+
+<div id="top-info"><div id="death-msg">SYSTEM CRITICAL: FAILED</div></div>
+
+<div id="stat-ui" class="ui-panel">
+    <div style="font-weight: 900; color: var(--p); font-size: 1.4rem;">💎 <span id="dia-count">0</span></div>
+    <div style="font-size: 0.8rem; color: #aaa; margin-top: 4px;">SCORE: <span id="score-val">0</span></div>
+    <div style="width: 100px; height: 6px; background: #333; margin-top: 8px; border-radius: 3px; overflow: hidden;">
+        <div id="hp-fill" style="width: 100%; height: 100%; background: var(--s); transition: width 0.2s;"></div>
+    </div>
+</div>
+
+<button id="pause-btn" onclick="togglePause()">PAUSE</button>
+
+<div id="admin-fab" onclick="toggleAdmin()">🛡️</div>
+
+<div id="admin-panel">
+    <h3 style="color: #ff0055; text-align: center; letter-spacing: 2px;">GOD OVERRIDE</h3>
+    <div class="admin-grid">
+        <button class="btn-cmd" onclick="admCmd(1)">GOD MODE</button>
+        <button class="btn-cmd" onclick="admCmd(2)">KILL ALL</button>
+        <button class="btn-cmd" onclick="admCmd(3)">+10K GEMS</button>
+        <button class="btn-cmd" onclick="admCmd(4)">FLASH SPD</button>
+        <button class="btn-cmd" onclick="admCmd(5)">MAX FIRE</button>
+        <button class="btn-cmd" onclick="admCmd(6)">STORM 360</button>
+        <button class="btn-cmd" onclick="admCmd(7)">FREEZE ENEMY</button>
+        <button class="btn-cmd" onclick="admCmd(8)">LVL 99</button>
+        <button class="btn-cmd" onclick="admCmd(9)">GHOST HP</button>
+        <button class="btn-cmd" onclick="admCmd(10)">RESET DATA</button>
+    </div>
+    <button class="btn" style="background:#222; color:#fff; margin-top:15px;" onclick="toggleAdmin()">EXIT CONSOLE</button>
+</div>
+
+<div id="death-menu" class="overlay">
+    <div class="box">
+        <h2 style="color:var(--dmg); margin-bottom:10px;">WIPED OUT</h2>
+        <p id="final-score" style="margin-bottom:25px; color: #888;">Final Data: 0</p>
+        <button class="btn btn-rebirth" onclick="rebirth()">REBIRTH (1,000 💎)</button>
+        <button class="btn btn-exit" onclick="exitGame()">EXIT HUB</button>
+    </div>
+</div>
+
+<div id="shop-menu" class="overlay">
+    <div class="box">
+        <h2 style="color:var(--p); margin-bottom:20px;">MODIFICATION</h2>
+        <button class="btn btn-shop" onclick="buyStat('atk')">UPGRADE TRIANGLE (50 💎)</button>
+        <button class="btn btn-shop" onclick="buyStat('spd')">UPGRADE TURBO (50 💎)</button>
+        <button class="btn btn-exit" onclick="togglePause()">RESUME</button>
+    </div>
+</div>
+
+<div id="joy-base"><div id="joy-stick"></div></div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    // --- Firebase & Audio Setup ---
+    const firebaseConfig = { apiKey: "AIzaSyA21Am8gAcwgzaB2UfTsCCyRa6NpquAGTA", authDomain: "webgame-fb202.firebaseapp.com", databaseURL: "https://webgame-fb202-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "webgame-fb202", storageBucket: "webgame-fb202.firebasestorage.app", messagingSenderId: "325793223841", appId: "1:325793223841:web:ed3c2e50cebd389dc48ce0" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const usr = localStorage.getItem("username") || "Guest";
+    const uRef = db.ref('players/' + usr);
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'shoot') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+            gain.gain.setValueAtTime(0.08, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(); osc.stop(now + 0.1);
+        } else if (type === 'hit') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(150, now);
+            gain.gain.setValueAtTime(0.04, now); gain.gain.linearRampToValueAtTime(0, now + 0.05);
+            osc.start(); osc.stop(now + 0.05);
+        } else if (type === 'explode') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now);
+            osc.frequency.linearRampToValueAtTime(20, now + 0.2);
+            gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            osc.start(); osc.stop(now + 0.2);
+        } else if (type === 'death') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(400, now);
+            osc.frequency.exponentialRampToValueAtTime(10, now + 1);
+            gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now + 1);
+            osc.start(); osc.stop(now + 1);
+        }
+    }
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+
+    let player = { x: canvas.width/2, y: canvas.height/2, vx: 0, vy: 0, hp: 100, maxHp: 100, speedBase: 0.8, friction: 0.9, score: 0, diamonds: 0, dmg: 1, walkFrame: 0, isFiring: 0, color: '#00f2ff' };
+    let enemies = [], bullets = [], isPaused = false, isDead = false;
+    let joystick = { active: false, startX: 0, startY: 0, angle: 0, force: 0 };
+    
+    let isGodMode = false, isFreeze = false, fireRate = 450;
+
+    if(usr.toLowerCase() === "admin") document.getElementById('admin-fab').style.display = "flex";
+
+    uRef.on('value', s => { 
+        if(s.val()) {
+            player.diamonds = Math.floor(s.val().diamonds || 0); 
+            document.getElementById('dia-count').innerText = player.diamonds.toLocaleString();
+        } 
+    });
+
+    function drawStickman(x, y, color, frame, fireAnim) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+        ctx.shadowBlur = 15; ctx.shadowColor = color;
+        let walk = Math.sin(frame * 0.15) * 8;
+        let recoil = fireAnim > 0 ? -4 : 0;
+        ctx.beginPath();
+        ctx.arc(x + recoil, y - 28, 7, 0, Math.PI*2);
+        ctx.moveTo(x + recoil, y - 21); ctx.lineTo(x + recoil, y - 5);
+        ctx.moveTo(x + recoil, y - 5); ctx.lineTo(x - 6 + walk + recoil, y + 6);
+        ctx.moveTo(x + recoil, y - 5); ctx.lineTo(x + 6 - walk + recoil, y + 6);
+        ctx.moveTo(x + recoil, y - 16); ctx.lineTo(x - 12 + recoil, y - 10 - walk/2);
+        ctx.moveTo(x + recoil, y - 16); ctx.lineTo(x + 18 + recoil, y - 16);
+        ctx.stroke();
+    }
+
+    function drawEnemy(e) {
+        ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(Date.now() * 0.006);
+        ctx.strokeStyle = '#ff3333'; ctx.lineWidth = 2.5; ctx.shadowBlur = 12; ctx.shadowColor = '#ff3333';
+        ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(13,0); ctx.lineTo(0,13); ctx.lineTo(-13,0); ctx.closePath();
+        ctx.stroke(); ctx.restore();
+    }
+
+    function update() {
+        if(isPaused || isDead) return;
+        if(joystick.active) {
+            player.vx += Math.cos(joystick.angle) * player.speedBase * joystick.force;
+            player.vy += Math.sin(joystick.angle) * player.speedBase * joystick.force;
+            player.walkFrame += joystick.force * 2;
+        }
+        player.x += player.vx; player.y += player.vy;
+        player.vx *= player.friction; player.vy *= player.friction;
+
+        if(player.x < 20) player.x = 20; if(player.x > canvas.width-20) player.x = canvas.width-20;
+        if(player.y < 30) player.y = 30; if(player.y > canvas.height-20) player.y = canvas.height-20;
+
+        if(player.isFiring > 0) player.isFiring--;
+
+        bullets.forEach((b, i) => {
+            b.x += Math.cos(b.angle) * b.speed; b.y += Math.sin(b.angle) * b.speed;
+            if(b.x < -50 || b.x > canvas.width+50 || b.y < -50 || b.y > canvas.height+50) bullets.splice(i,1);
+        });
+
+        enemies.forEach((e, i) => {
+            if(!isFreeze) {
+                let a = Math.atan2(player.y - e.y, player.x - e.x);
+                e.x += Math.cos(a) * e.speed; e.y += Math.sin(a) * e.speed;
+            }
+            if(Math.hypot(player.x - e.x, player.y - e.y) < 22 && !isGodMode) {
+                player.hp -= 0.8;
+                document.getElementById('hp-fill').style.width = (player.hp/player.maxHp*100) + '%';
+                if(player.hp <= 0) triggerDeath();
+            }
+            bullets.forEach((b, bi) => {
+                if(Math.hypot(e.x - b.x, e.y - b.y) < 18) {
+                    e.hp -= b.power; bullets.splice(bi, 1);
+                    playSound('hit');
+                    if(e.hp <= 0) { 
+                        enemies.splice(i,1); 
+                        player.score += 10; 
+                        playSound('explode');
+                        document.getElementById('score-val').innerText = player.score; 
+                    }
+                }
+            });
+        });
+        if(Math.random() < 0.03) enemies.push({ x: Math.random() > 0.5 ? -20 : canvas.width+20, y: Math.random()*canvas.height, speed: 1.2 + Math.random() * 1.5, hp: 2 + player.score/800 });
+    }
+
+    function toggleAdmin() {
+        const p = document.getElementById('admin-panel');
+        p.style.display = p.style.display === 'block' ? 'none' : 'block';
+        isPaused = p.style.display === 'block';
+    }
+
+    function admCmd(id) {
+        switch(id) {
+            case 1: isGodMode = !isGodMode; break;
+            case 2: enemies = []; playSound('explode'); break;
+            case 3: uRef.update({ diamonds: player.diamonds + 10000 }); break;
+            case 4: player.speedBase = 2.5; break;
+            case 5: fireRate = 80; startShooting(); break;
+            case 6: 
+                for(let a=0; a<Math.PI*2; a+=0.4) {
+                    bullets.push({ x: player.x+15, y: player.y-16, angle: a, speed: 12, color: '#ff00ff', power: 10 });
+                }
+                playSound('shoot'); break;
+            case 7: isFreeze = !isFreeze; break;
+            case 8: player.score += 50000; player.dmg = 50; break;
+            case 9: player.hp = 999999; player.maxHp = 999999; document.getElementById('hp-fill').style.width = '100%'; break;
+            case 10: if(confirm("Reset?")) uRef.set({ diamonds: 0, last_score: 0 }); break;
+        }
+    }
+
+    function triggerDeath() {
+        isDead = true; playSound('death');
+        document.getElementById('death-msg').style.display = 'block';
+        document.getElementById('death-menu').style.display = 'flex';
+        document.getElementById('final-score').innerText = "SCORE: " + player.score;
+        uRef.update({ last_score: player.score, status: "Offline (Dead)" });
+    }
+
+    function rebirth() {
+        if(player.diamonds >= 1000) {
+            uRef.update({ diamonds: player.diamonds - 1000 });
+            player.hp = player.maxHp; isDead = false; enemies = [];
+            document.getElementById('hp-fill').style.width = '100%';
+            document.getElementById('death-menu').style.display = 'none';
+            document.getElementById('death-msg').style.display = 'none';
+        }
+    }
+
+    let shotInterval;
+    function startShooting() {
+        if(shotInterval) clearInterval(shotInterval);
+        shotInterval = setInterval(() => {
+            if(isPaused || isDead || enemies.length === 0) return;
+            let target = enemies[0];
+            let color = player.dmg > 5 ? '#ffcc00' : (player.dmg > 2 ? '#00ff88' : '#00f2ff');
+            bullets.push({ x: player.x + 15, y: player.y - 16, angle: Math.atan2(target.y - (player.y-16), target.x - (player.x+15)), speed: 12, color: color, power: player.dmg });
+            player.isFiring = 6;
+            playSound('shoot');
+        }, fireRate);
+    }
+    startShooting();
+
+    function buyStat(type) {
+        if(player.diamonds >= 50) {
+            uRef.update({ diamonds: player.diamonds - 50 });
+            if(type === 'atk') player.dmg += 1.5;
+            else player.speedBase += 0.2;
+        }
+    }
+
+    function togglePause() { if(!isDead) { isPaused = !isPaused; document.getElementById('shop-menu').style.display = isPaused ? 'flex' : 'none'; } }
+
+    const jb = document.getElementById('joy-base'), js = document.getElementById('joy-stick');
+    window.addEventListener('touchstart', e => {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        if(isPaused || isDead) return;
+        joystick.active = true; joystick.startX = e.touches[0].clientX; joystick.startY = e.touches[0].clientY;
+        jb.style.display = 'block'; jb.style.left = joystick.startX-60+'px'; jb.style.top = joystick.startY-60+'px';
+    });
+    window.addEventListener('touchmove', e => {
+        if(!joystick.active) return;
+        let dx = e.touches[0].clientX - joystick.startX, dy = e.touches[0].clientY - joystick.startY;
+        let dist = Math.min(Math.hypot(dx, dy), 50);
+        joystick.angle = Math.atan2(dy, dx); joystick.force = dist/50;
+        js.style.transform = `translate(${dx*dist/Math.hypot(dx,dy)}px, ${dy*dist/Math.hypot(dx,dy)}px)`;
+    });
+    window.addEventListener('touchend', () => { joystick.active = false; jb.style.display = 'none'; joystick.force = 0; });
+
+    function loop() {
+        update();
+        ctx.fillStyle = 'rgba(5, 5, 16, 0.25)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        bullets.forEach(b => {
+            ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.angle);
+            ctx.fillStyle = b.color; ctx.beginPath(); ctx.moveTo(12,0); ctx.lineTo(-6,-7); ctx.lineTo(-6,7); ctx.closePath(); ctx.fill(); ctx.restore();
+        });
+        enemies.forEach(drawEnemy);
+        if(!isDead) drawStickman(player.x, player.y, player.color, player.walkFrame, player.isFiring);
+        requestAnimationFrame(loop);
+    }
+    loop();
+
+    function exitGame() { window.location.href = "index.html"; }
+</script>
+</body>
+</html>
